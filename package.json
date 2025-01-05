@@ -5,6 +5,10 @@
   "repository": "https://gitlab.com/gordonrampay/fashionconnect-backend.git",
   "author": "gordonrampay <whyboo2004@gmail.com>",
   "license": "MIT",
+  "scripts": {
+    "dev": "node server.ts",
+    "build": "node server.ts"
+  },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.7",
