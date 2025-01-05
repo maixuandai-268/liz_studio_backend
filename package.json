@@ -7,7 +7,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "node server.ts",
-    "build": "node server.ts"
+    "build": "node server.ts",
+    "start": "node server.ts",
+    "lint": "node server.ts"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
