@@ -1,25 +1,28 @@
 {
-  "name": "fashionconnect-backend",
+  "name": "express-mongodb",
   "version": "1.0.0",
-  "main": "index.js",
-  "repository": "https://gitlab.com/gordonrampay/fashionconnect-backend.git",
-  "author": "gordonrampay <whyboo2004@gmail.com>",
-  "license": "MIT",
+  "description": "Node.js Restful CRUD API with Node.js, Express and MongoDB",
+  "main": "server.js",
   "scripts": {
-    "dev": "node server.ts",
-    "build": "node server.ts",
-    "start": "node server.ts",
-    "lint": "node server.ts"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
+  "keywords": [
+    "nodejs",
+    "express",
+    "rest",
+    "api",
+    "mongodb"
+  ],
+  "author": "bezkoder",
+  "license": "ISC",
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "fashionconnect-backend": "file:",
-    "mongoose": "^8.9.3",
-    "next": "^15.1.3"
-  },
-  "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
-    "@types/node": "^22.10.5"
+    "express": "^4.21.2",
+    "express-mongodb": "file:",
+    "mongodb": "^6.12.0",
+    "mongoose": "^6.13.6"
   }
 }
