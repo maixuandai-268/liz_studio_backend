@@ -3,6 +3,8 @@ const express = require('express');
 const { connectToDatabase } = require('./app/config/db.config'); // Đường dẫn đến db.config.js
 const itemRoutes = require('./app/routers/item.routers');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
+const bodyParser = require('body-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -12,6 +14,35 @@ app.use(express.json());
 
 // Sử dụng middleware CORS
 app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+// Xử lý form gửi
+app.post('/send', (req, res) => {
+    const { name, email, message } = req.body;
+
+    const transporter = nodemailer.createTransport({
+        service: 'Gmail',
+        auth: {
+            user: 'whyboo2004@gmail.com', // Thay bằng email của bạn
+            pass: 'D@icl123'     // Thay bằng mật khẩu
+        }
+    });
+
+    const mailOptions = {
+        from: email,
+        to: 'your_email@gmail.com', // Thay bằng email bạn muốn nhận
+        subject: `Thông tin liên hệ từ ${name}`,
+        text: `Họ và tên: ${name}\nEmail: ${email}\nTin nhắn: ${message}`
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            return res.status(500).send('Có lỗi xảy ra, vui lòng thử lại.');
+        }
+        res.send('Cảm ơn bạn! Tin nhắn của bạn đã được gửi.');
+    });
+});
 
 // Kết nối MongoDB
 connectToDatabase().catch(err => {
