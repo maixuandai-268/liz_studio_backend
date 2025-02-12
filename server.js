@@ -32,7 +32,7 @@ app.post('/send', (req, res) => {
 
     const mailOptions = {
         from: email,
-        to: 'your_email@gmail.com', // Thay bằng email bạn muốn nhận
+        to: 'whyboo2004@gmail.com', // Thay bằng email bạn muốn nhận
         subject: `Thông tin liên hệ từ ${name}`,
         text: `Họ và tên: ${name}\nEmail: ${email}\nTin nhắn: ${message}`
     };
