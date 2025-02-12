@@ -24,9 +24,10 @@ app.post('/send', (req, res) => {
     const transporter = nodemailer.createTransport({
         service: 'Gmail',
         auth: {
-            user: 'whyboo2004@gmail.com', // Thay bằng email của bạn
-            pass: 'D@icl123'     // Thay bằng mật khẩu
-        }
+            user: process.env.EMAIL_USER, // Thay bằng email của bạn
+            pass: process.env.EMAIL_PASS     // Thay bằng mật khẩu
+        },
+        debug: true
     });
 
     const mailOptions = {
