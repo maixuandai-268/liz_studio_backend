@@ -2,11 +2,18 @@ const multer = require('multer');
 const path = require('path');
 const { Project , ObjectId } = require('../models/project.model');
 
+
+const uploadPath = path.join(__dirname, 'uploads');
+
+// Kiểm tra xem thư mục có tồn tại không, nếu không thì tạo nó
+if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
+}
 // Cấu hình lưu trữ cho multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         // cb(null, 'D:/LIZ/liz_studio_backend/app/uploads/'); // Thư mục lưu trữ
-        const uploadPath = path.join(__dirname, 'uploads'); // Đường dẫn tuyệt đối đến thư mục uploads
+        // const uploadPath = path.join(__dirname, 'uploads'); // Đường dẫn tuyệt đối đến thư mục uploads
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
