@@ -1,16 +1,24 @@
 require('dotenv').config();
 const express = require('express');
-const { connectToDatabase } = require('./app/config/db.config'); // Đường dẫn đến db.config.js
+const { connectToDatabase } = require('./app/config/db.config'); 
 const itemRoutes = require('./app/routers/item.routers');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const bodyParser = require('body-parser');
+const projectRoutes = require('./app/routers/project.routers'); 
+const middleware = require('./app/middleware/db.middleware');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.json());
+app.use(middleware);
+
+
+// Phục vụ tệp tĩnh từ thư mục uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Sử dụng middleware CORS
 app.use(cors());
@@ -53,6 +61,7 @@ connectToDatabase().catch(err => {
 
 // Routes
 app.use('/items', itemRoutes);
+app.use('/projects', projectRoutes);
 
 // Xử lý lỗi toàn cục
 app.use((err, req, res, next) => {
