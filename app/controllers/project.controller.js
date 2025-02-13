@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const { Project , ObjectId } = require('../models/project.model');
+const fs = require('fs');
 
 
 const uploadPath = path.join(__dirname, 'uploads');
