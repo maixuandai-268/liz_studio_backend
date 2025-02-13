@@ -24,15 +24,15 @@ app.post('/send', (req, res) => {
     const transporter = nodemailer.createTransport({
         service: 'Gmail',
         auth: {
-            user: process.env.EMAIL_USER, // Thay bằng email của bạn
-            pass: process.env.EMAIL_PASS     // Thay bằng mật khẩu
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS    
         },
         debug: true
     });
 
     const mailOptions = {
         from: email,
-        to: 'whyboo2004@gmail.com', // Thay bằng email bạn muốn nhận
+        to: 'maiminhthin@gmail.com',
         subject: `Thông tin liên hệ từ ${name}`,
         text: `Họ và tên: ${name}\nEmail: ${email}\nTin nhắn: ${message}`
     };
@@ -48,7 +48,7 @@ app.post('/send', (req, res) => {
 // Kết nối MongoDB
 connectToDatabase().catch(err => {
     console.error('Failed to connect to MongoDB:', err.message);
-    process.exit(1); // Dừng ứng dụng nếu kết nối không thành công
+    process.exit(1); 
 });
 
 // Routes
