@@ -4,7 +4,7 @@ const { Project , ObjectId } = require('../models/project.model');
 const fs = require('fs');
 
 
-const uploadPath = path.join(__dirname, 'uploads');
+const uploadPath = path.join(__dirname, '../uploads');
 
 // Kiểm tra xem thư mục có tồn tại không, nếu không thì tạo nó
 if (!fs.existsSync(uploadPath)) {
@@ -13,8 +13,6 @@ if (!fs.existsSync(uploadPath)) {
 // Cấu hình lưu trữ cho multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        // cb(null, 'D:/LIZ/liz_studio_backend/app/uploads/'); // Thư mục lưu trữ
-        // const uploadPath = path.join(__dirname, 'uploads'); // Đường dẫn tuyệt đối đến thư mục uploads
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
@@ -24,8 +22,8 @@ const storage = multer.diskStorage({
 
 // Tạo middleware multer cho trường 'images' và 'imageBackground'
 const upload = multer({ storage }).fields([
-    { name: 'images', maxCount: 10 }, // Tối đa 10 tệp cho trường 'images'
-    { name: 'imageBackground', maxCount: 1 } // Tối đa 1 tệp cho trường 'imageBackground'
+    { name: 'images', maxCount: 10 }, 
+    { name: 'imageBackground', maxCount: 1 }
 ]);
 
 
