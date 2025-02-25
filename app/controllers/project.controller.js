@@ -1,37 +1,52 @@
 const multer = require('multer');
-const path = require('path');
-const { Project , ObjectId } = require('../models/project.model');
-const fs = require('fs');
+const { Project, ObjectId } = require('../models/project.model');
+const cloudinary = require('../config/cloudinary');
+const { Readable } = require('stream');
 
-
-const uploadPath = path.join(__dirname, '../uploads');
-
-// Kiểm tra xem thư mục có tồn tại không, nếu không thì tạo nó
-if (!fs.existsSync(uploadPath)) {
-    fs.mkdirSync(uploadPath, { recursive: true });
-}
-// Cấu hình lưu trữ cho multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // Tên tệp
-    },
-});
+// Cấu hình multer sử dụng memoryStorage (lưu file trong RAM dưới dạng buffer)
+const storage = multer.memoryStorage();
 
 // Tạo middleware multer cho trường 'images' và 'imageBackground'
-const upload = multer({ storage }).fields([
-    { name: 'images', maxCount: 10 }, 
-    { name: 'imageBackground', maxCount: 1 }
+const upload = multer({
+    storage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // Giới hạn 10MB (tuỳ chỉnh nếu cần)
+}).fields([
+    { name: 'images', maxCount: 10 },
+    { name: 'imageBackground', maxCount: 1 },
 ]);
 
+// Hàm hỗ trợ để upload buffer lên Cloudinary
+const uploadToCloudinary = (buffer, originalname) => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { resource_type: 'auto', public_id: `${Date.now()}-${originalname.split('.')[0]}` },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result.secure_url);
+            }
+        );
+        const readableStream = new Readable();
+        readableStream.push(buffer);
+        readableStream.push(null);
+        readableStream.pipe(stream);
+    });
+};
 
 // CREATE: Tạo dự án mới với ảnh
 const createProject = async (req, res) => {
     try {
-        const images = req.files['images'] ? req.files['images'].map(file => file.path) : [];
-        const imageBackground = req.files['imageBackground'] ? req.files['imageBackground'][0].path : '';
+        // Upload images lên Cloudinary từ buffer
+        const images = req.files['images']
+            ? await Promise.all(
+                  req.files['images'].map(file => uploadToCloudinary(file.buffer, file.originalname))
+              )
+            : [];
+
+        // Upload imageBackground lên Cloudinary từ buffer
+        const imageBackground = req.files['imageBackground']
+            ? await uploadToCloudinary(req.files['imageBackground'][0].buffer, req.files['imageBackground'][0].originalname)
+            : '';
+
         const projectData = {
             projectName: req.body.projectName,
             year: req.body.year,
@@ -41,10 +56,11 @@ const createProject = async (req, res) => {
             description: req.body.description,
             images: images,
         };
+
         const result = await req.db.collection('projects').insertOne(projectData);
         res.status(201).send({ id: result.insertedId });
     } catch (error) {
-        console.error('Error creating project:', error); // Ghi log lỗi
+        console.error('Error creating project:', error);
         res.status(400).send({ message: 'Error creating project', error });
     }
 };
@@ -73,31 +89,70 @@ const getProjectById = async (req, res) => {
 // UPDATE: Cập nhật dự án
 const updateProject = async (req, res) => {
     try {
-        const images = req.files ? req.files.map(file => file.path) : [];
+        // Lấy dữ liệu dự án hiện tại từ MongoDB
+        const project = await req.db.collection('projects').findOne({ _id: new ObjectId(req.params.id) });
+        if (!project) return res.status(404).send({ message: 'Không tìm thấy dự án' });
+
+        // Upload ảnh mới lên Cloudinary nếu có, nếu không giữ nguyên ảnh cũ
+        const images = req.files['images']
+            ? await Promise.all(
+                req.files['images'].map(file => uploadToCloudinary(file.buffer, file.originalname))
+            )
+            : project.images;
+
+        const imageBackground = req.files['imageBackground']
+            ? await uploadToCloudinary(req.files['imageBackground'][0].buffer, req.files['imageBackground'][0].originalname)
+            : project.backgroundImage;
+
+        // Tạo object dữ liệu cập nhật, ưu tiên dữ liệu mới, nếu không thì giữ dữ liệu cũ
         const updatedData = {
-            projectName: req.body.projectName,
-            year: req.body.year,
-            backgroundImage: req.body.backgroundImage,
-            clientName: req.body.clientName,
-            locationName: req.body.locationName,
-            description: req.body.description,
-            images: images.length > 0 ? images : undefined,
+            projectName: req.body.projectName || project.projectName,
+            year: req.body.year || project.year,
+            backgroundImage: imageBackground,
+            clientName: req.body.clientName || project.clientName,
+            locationName: req.body.locationName || project.locationName,
+            description: req.body.description || project.description,
+            images: images,
         };
-        const result = await Project.update(req.db, req.params.id, updatedData);
-        if (result.matchedCount === 0) return res.status(404).send({ message: 'Project not found' });
-        res.status(200).send({ message: 'Project updated successfully' });
+
+        // Cập nhật vào MongoDB
+        const result = await req.db.collection('projects').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: updatedData }
+        );
+
+        if (result.matchedCount === 0) return res.status(404).send({ message: 'Không tìm thấy dự án' });
+        res.status(200).send({ message: 'Cập nhật dự án thành công' });
     } catch (error) {
-        res.status(400).send({ message: 'Error updating project', error });
+        console.error('Lỗi khi cập nhật dự án:', error);
+        res.status(400).send({ message: 'Lỗi khi cập nhật dự án', error });
     }
 };
 
 // DELETE: Xóa dự án
 const deleteProject = async (req, res) => {
     try {
+        const project = await Project.fromMongo(req.db, req.params.id);
+        if (!project) return res.status(404).send({ message: 'Project not found' });
+
+        // Xóa ảnh trên Cloudinary (nếu muốn)
+        if (project.backgroundImage) {
+            const publicId = project.backgroundImage.split('/').pop().split('.')[0];
+            await cloudinary.uploader.destroy(publicId);
+        }
+        if (project.images && project.images.length > 0) {
+            const deletePromises = project.images.map(image => {
+                const publicId = image.split('/').pop().split('.')[0];
+                return cloudinary.uploader.destroy(publicId);
+            });
+            await Promise.all(deletePromises);
+        }
+
         const result = await Project.delete(req.db, req.params.id);
         if (result.deletedCount === 0) return res.status(404).send({ message: 'Project not found' });
         res.status(204).send();
     } catch (error) {
+        console.error('Error deleting project:', error);
         res.status(500).send({ message: 'Error deleting project', error });
     }
 };
