@@ -75,7 +75,6 @@ const getAllProjects = async (req, res) => {
     }
 };
 
-// READ: Lấy dự án theo ID
 const getProjectById = async (req, res) => {
     try {
         const project = await Project.fromMongo(req.db, req.params.id);
@@ -86,10 +85,8 @@ const getProjectById = async (req, res) => {
     }
 };
 
-// UPDATE: Cập nhật dự án
 const updateProject = async (req, res) => {
     try {
-        // Lấy dữ liệu dự án hiện tại từ MongoDB
         const project = await req.db.collection('projects').findOne({ _id: new ObjectId(req.params.id) });
         if (!project) return res.status(404).send({ message: 'Không tìm thấy dự án' });
 
@@ -129,7 +126,6 @@ const updateProject = async (req, res) => {
     }
 };
 
-// DELETE: Xóa dự án
 const deleteProject = async (req, res) => {
     try {
         const project = await Project.fromMongo(req.db, req.params.id);
@@ -157,7 +153,6 @@ const deleteProject = async (req, res) => {
     }
 };
 
-// Xuất các hàm và multer middleware
 module.exports = {
     upload,
     createProject,
