@@ -75,6 +75,20 @@ const getAllProjects = async (req, res) => {
     }
 };
 
+const getAllProjectsWithFields = async (req, res) => {
+    try {
+        const fields = ['projectName', 'backgroundImage', 'clientName'];
+        const projects = await Project.findProjectsWithFields(req.db, fields);
+        if (!projects || projects.length === 0) {
+            return res.status(404).send({ message: 'No projects found' });
+        }
+        res.status(200).send(projects);
+    } catch (error) {
+        console.error('Error fetching projects:', error.message, error.stack);
+        res.status(500).send({ message: 'Error fetching projects', error });
+    }
+};
+
 const getProjectById = async (req, res) => {
     try {
         const project = await Project.fromMongo(req.db, req.params.id);
@@ -160,4 +174,5 @@ module.exports = {
     getProjectById,
     updateProject,
     deleteProject,
+    getAllProjectsWithFields
 };

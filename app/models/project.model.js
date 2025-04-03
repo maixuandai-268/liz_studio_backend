@@ -27,6 +27,12 @@ class Project {
     static async findAll(db) {
         return await db.collection('projects').find({}).toArray();
     }
+    
+    static async findProjectsWithFields(db, fields) {
+        const projection = {};
+        fields.forEach(field => projection[field] = 1); 
+        return await db.collection('projects').find({}, { projection }).toArray();
+    }
 
     // Phương thức tĩnh để lấy dự án theo ID
     static async fromMongo(db, id) {

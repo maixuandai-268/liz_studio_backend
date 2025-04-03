@@ -53,23 +53,19 @@ app.post('/send', (req, res) => {
     });
 });
 
-// Kết nối MongoDB
 connectToDatabase().catch(err => {
     console.error('Failed to connect to MongoDB:', err.message);
     process.exit(1); 
 });
 
 // Routes
-app.use('/items', itemRoutes);
 app.use('/projects', projectRoutes);
 
-// Xử lý lỗi toàn cục
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// Khởi động server
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
