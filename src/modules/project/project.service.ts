@@ -19,7 +19,6 @@ export class ProjectService {
 
   async findOne(id: number) {
     const project = await this.projectRepo.findOneBy({ id });
-
     if (!project) {
       throw new BadRequestException(`Không tìm thấy Project với id ${id}`);
     }
