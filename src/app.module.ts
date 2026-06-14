@@ -9,20 +9,20 @@ import { UploadModule } from './modules/upload/upload.module';
 import { ProjectModule } from './modules/project/project.module';
 require('dotenv').config();
 
-const password = process.env.DB_PASSWORD || '';
 
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: password,
-      database: 'liz_studio',
+      url: process.env.DATABASE_URL,
       autoLoadEntities: true,
       synchronize: true,
+
+      ssl: {
+        rejectUnauthorized: false,
+        
+      },
     }),
     UploadModule,
     ProjectModule
