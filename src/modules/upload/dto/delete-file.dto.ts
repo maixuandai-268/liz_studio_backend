@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { IsString, IsOptional, IsIn } from 'class-validator';
 
 export class DeleteFileDto {
@@ -5,6 +6,6 @@ export class DeleteFileDto {
   public_id: string;
 
   @IsOptional()
-  @IsIn(['image', 'raw'])
-  resource_type?: 'image' | 'raw';
+  @IsIn(['image'])
+  resource_type?: 'image';
 }

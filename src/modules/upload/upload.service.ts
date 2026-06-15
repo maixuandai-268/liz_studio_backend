@@ -13,10 +13,6 @@ import { Multer } from 'multer';
 @Injectable()
 export class UploadService {
     async uploadFile(file: Express.Multer.File) {
-        const isGLB =
-            file.mimetype === 'model/gltf-binary' ||
-            file.originalname.toLowerCase().endsWith('.glb');
-
         const fileName = file.originalname.split('.')[0];
 
         return new Promise((resolve, reject) => {
@@ -24,10 +20,10 @@ export class UploadService {
             cloudinary.uploader
                 .upload_stream(
                     {
-                        folder: 'outfitslab',
-                        resource_type: isGLB ? 'raw' : 'image',
+                        folder: 'liz_studio',
+                        resource_type: 'image',
 
-                        public_id: isGLB ? `${fileName}.glb` : undefined,
+                        public_id: fileName,
                     },
                     (error, result) => {
                         if (error) return reject(error);
@@ -41,7 +37,7 @@ export class UploadService {
                         resolve({
                             url: result.secure_url,
                             public_id: result.public_id,
-                            type: isGLB ? 'model' : 'image',
+                            type: 'image',
                         });
                     },
                 )
@@ -54,7 +50,7 @@ export class UploadService {
         return Promise.all(files.map((file) => this.uploadFile(file)));
     }
 
-    async deleteFile(publicId: string, resourceType: 'image' | 'raw' = 'image') {
+    async deleteFile(publicId: string, resourceType: 'image') {
         return cloudinary.uploader.destroy(publicId, {
             resource_type: resourceType,
         });
@@ -64,7 +60,7 @@ export class UploadService {
     async updateFile(
         file: Express.Multer.File,
         oldPublicId: string,
-        resourceType: 'image' | 'raw',
+        resourceType: 'image',
     ) {
         await this.deleteFile(oldPublicId, resourceType);
         return this.uploadFile(file);

@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-ignore
 import { v2 as cloudinary } from 'cloudinary';
 

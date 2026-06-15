@@ -66,7 +66,7 @@ export class UploadController {
   async delete(@Body() body: DeleteFileDto) {
     return this.uploadService.deleteFile(
       body.public_id,
-      body.resource_type || 'image',
+      'image',
     );
   }
 }
