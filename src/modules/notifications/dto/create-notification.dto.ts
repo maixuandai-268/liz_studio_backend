@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { IsEnum, IsNumber, IsOptional, IsNotEmpty, IsString } from 'class-validator';
-import { NotificationType } from '../notification.entity';
+import { NotificationType } from '../entities/notification.entity';
 
 export class CreateNotificationDto {
   @IsNumber()

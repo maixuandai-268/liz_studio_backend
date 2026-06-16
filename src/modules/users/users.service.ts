@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable prettier/prettier */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
+import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
@@ -18,14 +20,11 @@ export class UsersService {
 
   async findAll() {
     return this.userRepo.find({
-      relations: ['shop'], // giữ giống findById nếu bạn cần
     });
   }
 
-  async findByRole(role: string) {
+  async findByRole() {
     return this.userRepo.find({
-      where: { role: role as any },
-      relations: ['shop'],
     });
   }
 
@@ -67,19 +66,6 @@ export class UsersService {
     console.log("✅ [UsersService] User found:", user.email);
 
     // 2. Delete associated shop first (to avoid FK constraint)
-    try {
-      console.log("🗑️ [UsersService] Checking for associated shop...");
-      const shopRepository = this.userRepo.manager.getRepository('Shop');
-      const shopDeleteResult = await shopRepository.delete({ ownerId: userId });
-      if (shopDeleteResult.affected && shopDeleteResult.affected > 0) {
-        console.log("✅ [UsersService] Deleted", shopDeleteResult.affected, "shop(s)");
-      } else {
-        console.log("ℹ️ [UsersService] No shops found for this user");
-      }
-    } catch (err) {
-      console.warn("⚠️ [UsersService] Failed to delete shops:", err.message);
-      // Continue with user deletion even if shop deletion fails
-    }
 
     // 3. Delete user
     console.log("🗑️ [UsersService] Deleting user...");
@@ -94,10 +80,8 @@ export class UsersService {
     return result;
   }
 
-  findById(id: number) {
+  findById() {
     return this.userRepo.findOne({
-      where: { id },
-      relations: ['shop'],
     });
   }
 }
