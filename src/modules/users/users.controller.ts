@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable prettier/prettier */
 /* import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -24,9 +20,11 @@ export class UserController {
   }
 } */
 
-import { Controller, Get, Req, UseGuards, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards, Put, Delete, Param, Body, Query, Post } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
+import { User } from './entities/user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Controller('users')
 export class UserController {
@@ -34,16 +32,20 @@ export class UserController {
     console.log("UserController loaded");
   }
 
-  // ✅ GET ALL USERS (with optional role filter)
+  @Post()
+  async create(@Body() user : CreateUserDto) {
+    return this.userService.create(user);
+  }
+
+
   @Get()
   async getAllUsers(@Query('role') role?: string) {
     if (role) {
-      return await this.userService.findByRole(role);
+      return await this.userService.findByRole();
     }
     return await this.userService.findAll();
   }
 
-  // ✅ UPDATE USER
   @Put(':id')
   async updateUser(
     @Param('id') id: string,
@@ -51,8 +53,6 @@ export class UserController {
   ) {
     return await this.userService.update(Number(id), body);
   }
-
-  // ✅ DELETE USER
   @Delete(':id')
   async deleteUser(@Param('id') id: string) {
     const userId = Number(id);
@@ -62,12 +62,12 @@ export class UserController {
       console.log("✅ [UserController] DELETE successful - Affected rows:", result.affected);
       return result;
     } catch (err) {
-      console.error("❌ [UserController] DELETE failed:", err.message);
+      console.error("❌ [UserController] DELETE failed:");
       throw err;
     }
   }
 
-  // API cũ giữ nguyên
+
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
   async getMe(@Req() req) {

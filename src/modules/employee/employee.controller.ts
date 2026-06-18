@@ -29,6 +29,7 @@ export class UserController {
 import { Controller, Get, Req, UseGuards, Put, Delete, Param, Body, Query } from '@nestjs/common';
 
 import { AuthGuard } from '@nestjs/passport';
+import { EmployeeService } from './employee.service';
 
 @Controller('employee')
 export class UserController {
@@ -37,13 +38,13 @@ export class UserController {
   }
 
   // ✅ GET ALL USERS (with optional role filter)
-  @Get()
-  async getAllUsers(@Query('role') role?: string) {
-    if (role) {
-      return await this.userService.findByRole(role);
-    }
-    return await this.userService.findAll();
-  }
+  // @Get()
+  // async getAllUsers(@Query('role') role?: string) {
+  //   if (role) {
+  //     return await this.userService.findByRole(role);
+  //   }
+  //   return await this.userService.findAll();
+  // }
 
   // ✅ UPDATE USER
   @Put(':id')
@@ -54,22 +55,19 @@ export class UserController {
     return await this.userService.update(Number(id), body);
   }
 
-  // ✅ DELETE USER
   @Delete(':id')
   async deleteUser(@Param('id') id: string) {
     const userId = Number(id);
     console.log("🗑️ [UserController] DELETE /api/users/:id received - ID:", userId, "TYPE:", typeof userId);
     try {
       const result = await this.userService.remove(userId);
-      console.log("✅ [UserController] DELETE successful - Affected rows:", result.affected);
       return result;
     } catch (err) {
-      console.error("❌ [UserController] DELETE failed:", err.message);
+      console.error("❌ [UserController] DELETE failed:");
       throw err;
     }
   }
 
-  // API cũ giữ nguyên
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
   async getMe(@Req() req) {

@@ -6,7 +6,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-export class UpdateUserDto {
+export class CreateUserDto {
   @IsOptional()
   @IsEnum(['employee', 'admin'])
   role?: 'employee' | 'admin';

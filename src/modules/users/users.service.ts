@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -13,14 +14,11 @@ export class UsersService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
   ) { }
+ 
 
-  findByEmail(email: string) {
-    return this.userRepo.findOne({ where: { email } });
-  }
 
   async findAll() {
-    return this.userRepo.find({
-    });
+    return this.userRepo.find({});
   }
 
   async findByRole() {
@@ -80,8 +78,22 @@ export class UsersService {
     return result;
   }
 
-  findById() {
-    return this.userRepo.findOne({
-    });
+  async findByEmpCode(employee_code : string){
+    return await this.userRepo.findOneBy({employee_code : employee_code })
   }
+
+  async findById(id : number){
+    return await this.userRepo.findOne({where: { id }});
+  }
+
+  async updateRefreshToken(
+  userId: number,
+  refreshToken: string,
+) {
+  const hash = await bcrypt.hash(refreshToken, 10);
+
+  await this.userRepo.update(userId, {
+    refresh_token: hash,
+  });
+}
 }

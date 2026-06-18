@@ -9,24 +9,20 @@ import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Shop } from '../shops/shop.entity'; 
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    
-    @InjectRepository(Shop)
-    private readonly shopsRepository: Repository<Shop>,
   ) {}
 
   async register(data: any) {
-    const { email, password, displayName } = data;
+    const { employee_code, password, role , email , isActive } = data;
 
-    const userExists = await this.usersService.findByEmail(email);
+    const userExists = await this.usersService.findByEmpCode(employee_code);
     if (userExists) {
-      throw new BadRequestException('Email đã tồn tại');
+      throw new BadRequestException('mã nhân viên đã tồn tại');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -34,42 +30,115 @@ export class AuthService {
     return this.usersService.create({
       email,
       password: hashedPassword,
-      displayName,
-      role: 'user', 
+      isActive : true,
+      role : "employee", 
+      employee_code
     });
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmailWithPassword(dto.email);
+  const user = await this.usersService.findByEmpCode(
+    dto.employee_code,
+  );
+
+  if (!user) {
+    throw new UnauthorizedException();
+  }
+
+
+  const isMatch = await bcrypt.compare(
+    dto.password,
+    user.password,
+  );
+
+  if (!isMatch) {
+    throw new UnauthorizedException();
+  }
+
+  const payload = {
+    sub: user.id,
+    code: user.employee_code,
+    role: user.role,
+  };
+
+  const accessToken = this.jwtService.sign(payload, {
+    expiresIn: '15m',
+  });
+
+  const refreshToken = this.jwtService.sign(payload, {
+    expiresIn: '7d',
+    secret: process.env.JWT_REFRESH_SECRET,
+  });
+
+  await this.usersService.updateRefreshToken(
+    user.id,
+    refreshToken,
+  );
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    user: {
+    id: user.id,
+    employee_code: user.employee_code,
+    role: user.role,
+  },
+  };
+}
+
+async refresh(refreshToken: string) {
+  try {
+    const payload = this.jwtService.verify(
+      refreshToken,
+      {
+        secret: process.env.JWT_REFRESH_SECRET,
+      },
+    );
+
+    const user = await this.usersService.findById(
+      payload.sub,
+    );
+
     if (!user) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
+      throw new UnauthorizedException(
+        'User not found',
+      );
     }
 
-    const isMatch = await bcrypt.compare(dto.password, user.password);
-    if (!isMatch) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
+    if (user.refresh_token !== refreshToken) {
+      throw new UnauthorizedException(
+        'Invalid refresh token',
+      );
     }
 
-    const userShop = await this.shopsRepository.findOne({ 
-      where: { ownerId: user.id } 
-    });
-
-    const payload = {
+    const newPayload = {
       sub: user.id,
-      email: user.email,
-      role: user.role, 
-      shopId: userShop ? userShop.id : null 
+      code: user.employee_code,
+      role: user.role,
     };
+
+    const accessToken = this.jwtService.sign(
+      newPayload,
+      {
+        expiresIn: '15m',
+      },
+    );
 
     return {
-      access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        displayName: user.displayName,
-        shopId: userShop ? userShop.id : null 
-      }
+      access_token: accessToken,
     };
+  } catch {
+    throw new UnauthorizedException(
+      'Refresh token invalid',
+    );
   }
+}
+
+async logout(userId: number) {
+  await this.usersService.updateRefreshToken(userId , null,);
+  return {
+    message: 'Logout success',
+  };
+}
+
 }

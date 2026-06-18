@@ -1,46 +1,36 @@
-import { 
-  Entity, 
-  PrimaryGeneratedColumn, 
-  Column, 
-  CreateDateColumn, 
-  UpdateDateColumn, 
-  OneToOne, 
-  OneToMany 
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-import { Notification } from '../../notifications/entities/notification.entity';
+import { Task } from './task.entity';
+import { User } from '../../users/entities/user.entity';
 
-@Entity('users')
-export class User {
+@Entity('task_activities')
+export class TaskActivity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ default: 'employee' })
-  role: 'employee' | 'admin';
+  @Column({ name: 'task_id' })
+  taskId: number;
 
-  @Column({nullable : true})   
-  employee_code : string;
+  @Column({ name: 'user_id' })
+  userId: number;
 
-  @Column({nullable :true})   
-  email : string;
+  @Column({ length: 255, nullable: true })
+  action: string;
 
-  @Column()
-  password_hash: string;
-
-  @Column({default : true}) 
-  isActive : boolean;
-
-  @Column({ nullable: true })
-  refresh_token: string;
-
-  @Column({ nullable: true })
-  last_login: Date;
-
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
+  @ManyToOne(() => Task)
+  @JoinColumn({ name: 'task_id' })
+  task: Task;
 
-  @OneToMany(() => Notification, (notification) => notification.user)
-  notifications: Notification[];
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 }

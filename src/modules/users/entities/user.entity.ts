@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable prettier/prettier */
 import { 
   Entity, 
   PrimaryGeneratedColumn, 
@@ -27,7 +24,7 @@ export class User {
   email : string;
 
   @Column()
-  password_hash: string;
+  password: string;
 
   @Column({default : true}) 
   isActive : boolean;
