@@ -6,6 +6,9 @@ import { TaskComment } from './entities/task-comment.entity';
 import { TaskAttachment } from './entities/task-attachment.entity';
 import { TaskActivity } from './entities/task-activity.entity';
 import { TaskChecklist } from './entities/task-checklist.entity';
+import { TasksService } from './tasks.service';
+import { RealtimeModule } from '@/modules/realtime/realtime.module';
+import { TaskLogsModule } from '@/modules/task-logs/task-logs.module';
 
 @Module({
   imports: [
@@ -17,6 +20,10 @@ import { TaskChecklist } from './entities/task-checklist.entity';
       TaskActivity,
       TaskChecklist,
     ]),
+    RealtimeModule,
+    TaskLogsModule,
   ],
+  providers: [TasksService],
+  exports: [TasksService],
 })
 export class TasksModule {}
