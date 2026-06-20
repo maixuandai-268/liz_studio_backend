@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { ChatRoom } from './chat-room.entity';
+import { Channel } from './channel.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('messages')
@@ -14,32 +15,33 @@ export class Message {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'room_id' })
+  @Column({ name: 'channel_id', nullable: true })
+  channelId: number;
+
+  @Column({ name: 'room_id', nullable: true })
   roomId: number;
 
   @Column({ name: 'user_id' })
   userId: number;
 
-  @Column({ length: 50, default: 'TEXT' })
-  type: string;
-
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text' })
   content: string;
 
-  @Column({ name: 'attachment_url', length: 255, nullable: true })
-  attachmentUrl: string;
-
-  @Column({ name: 'is_read', default: false })
-  isRead: boolean;
+  @Column({ type: 'varchar', length: 50, default: 'TEXT' })
+  type: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @ManyToOne(() => ChatRoom, (r) => r.messages)
+  @ManyToOne(() => Channel, (channel) => channel.messages)
+  @JoinColumn({ name: 'channel_id' })
+  channel: Channel;
+
+  @ManyToOne(() => ChatRoom, (room) => room.messages)
   @JoinColumn({ name: 'room_id' })
   room: ChatRoom;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: "user_id" })
   user: User;
 }

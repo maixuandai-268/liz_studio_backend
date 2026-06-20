@@ -7,7 +7,8 @@ import {
   CreateDateColumn, 
   UpdateDateColumn, 
   OneToOne, 
-  OneToMany 
+  OneToMany, 
+  JoinColumn
 } from 'typeorm';
 
 @Entity('employee')
@@ -15,13 +16,10 @@ export class Employee {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({nullable : true})   
-  userId : number;
-
   @Column({nullable :true})   
   full_name : string;
 
-  @Column()
+  @Column({nullable :true})
   avatar_url: string;
 
   @Column({default : true}) 
@@ -45,9 +43,12 @@ export class Employee {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToOne(() => User, (user) => user.id)
+   @OneToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column()
+  userId: number;
   @OneToOne(() => Level, (level) => level.id)
   level: Level;
 }

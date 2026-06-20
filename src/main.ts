@@ -1,15 +1,20 @@
-/* eslint-disable prettier/prettier */
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
+import { ChannelService } from './modules/chat/channels/channel.service';
+import cookieParser = require('cookie-parser');
+
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const channelService = app.get(ChannelService);
+  await channelService.initializeDefaultChannels();
+
   app.use(json({ limit: '200mb' }));
   app.use(urlencoded({ extended: true, limit: '200mb' }));
+
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -22,14 +27,18 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-  });
+  origin: [
+    "http://localhost:3001",
+    "http://10.4.4.56:3001",
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+});
+
+    app.use(cookieParser());
 
   const PORT = process.env.PORT || 3000;
 
-  await app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+  await app.listen(PORT,  "0.0.0.0");
 }
 bootstrap();

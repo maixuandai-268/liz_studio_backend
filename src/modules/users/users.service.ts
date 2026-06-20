@@ -7,12 +7,16 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import { Employee } from '../employee/entities/emplyee.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(Employee)
+    private empRepo: Repository<Employee>
   ) { }
  
 
@@ -26,10 +30,23 @@ export class UsersService {
     });
   }
 
-  create(data: Partial<User>) {
-    const user = this.userRepo.create(data);
-    return this.userRepo.save(user);
-  }
+  async create(createUserDto: CreateUserDto) {
+  const user = await this.userRepo.save(
+    this.userRepo.create({
+      employee_code: createUserDto.employee_code,
+      email: createUserDto.email,
+      password: createUserDto.password,
+    }),
+  );
+
+  await this.empRepo.save(
+    this.empRepo.create({
+      userId: user.id,
+    }),
+  );
+
+  return user;
+}
 
   findByEmailWithPassword(email: string) {
     return this.userRepo
@@ -54,7 +71,6 @@ export class UsersService {
     const userId = Number(id);
     console.log("🗑️ [UsersService] Removing user with ID:", userId, "(converted from", typeof id, ")");
 
-    // 1. Find user
     const user = await this.userRepo.findOneBy({ id: userId });
     if (!user) {
       console.error("❌ [UsersService] User not found with ID:", userId);
@@ -63,9 +79,6 @@ export class UsersService {
 
     console.log("✅ [UsersService] User found:", user.email);
 
-    // 2. Delete associated shop first (to avoid FK constraint)
-
-    // 3. Delete user
     console.log("🗑️ [UsersService] Deleting user...");
     const result = await this.userRepo.delete({ id: userId });
 

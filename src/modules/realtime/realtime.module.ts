@@ -7,7 +7,7 @@ import { ChatModule } from '@/modules/chat/chat.module';
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-secret-key',
+      secret: process.env.JWT_SECRET || 'secret-key',
       signOptions: { expiresIn: '24h' },
     }),
     forwardRef(() => ChatModule),

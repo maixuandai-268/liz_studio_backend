@@ -5,9 +5,11 @@ import {
   CreateDateColumn, 
   UpdateDateColumn, 
   OneToOne, 
-  OneToMany 
+  OneToMany, 
+  JoinColumn
 } from 'typeorm';
 import { Notification } from '../../notifications/entities/notification.entity';
+import { Employee } from '@/modules/employee/entities/emplyee.entity';
 
 @Entity('users')
 export class User {
@@ -40,6 +42,9 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToOne(() => Employee, (employee) => employee.user)
+  employee: Employee;
 
   @OneToMany(() => Notification, (notification) => notification.user)
   notifications: Notification[];

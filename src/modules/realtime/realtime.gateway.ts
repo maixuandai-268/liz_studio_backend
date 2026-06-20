@@ -12,6 +12,7 @@ import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RealtimeService } from './realtime.service';
 import { ChatService } from '@/modules/chat/chat.service';
+import { parse } from 'cookie';
 
 @WebSocketGateway({
   cors: {
@@ -39,18 +40,15 @@ export class RealtimeGateway
     }
   }
 
-  ngAfterInit() {
+  afterInit() {
     this.realtimeService.setServer(this.server);
     this.logger.log('RealtimeGateway initialized');
   }
 
-
   private verifyToken(token?: string | string[] | null): any {
     try {
       if (!token) return null;
-
       const tokenStr = Array.isArray(token) ? token[0] : token;
-
       return this.jwtService.verify(tokenStr, {
         secret: process.env.JWT_SECRET,
       });
@@ -61,57 +59,41 @@ export class RealtimeGateway
   }
 
   private getTokenFromCookie(cookieHeader?: string) {
-    if (!cookieHeader) return null;
+  if (!cookieHeader) return null;
 
-    const cookies = Object.fromEntries(
-      cookieHeader.split('; ').map((cookie) => {
-        const [key, ...value] = cookie.split('=');
-        return [key, decodeURIComponent(value.join('='))];
-      }),
-    );
-
-    return cookies.auth_token || cookies.refresh_token;
-  }
+  return parse(cookieHeader).auth_token ?? null;
+}
 
   handleConnection(client: Socket) {
-  const token =
-    this.getTokenFromCookie(client.handshake.headers.cookie) ||
-    (client.handshake.auth?.token as string | undefined) ||
-    (client.handshake.query.token as string | undefined) ||
-    (client.handshake.headers.authorization as string | undefined)?.split(' ')[1];
+    const token =
+      this.getTokenFromCookie(client.handshake.headers.cookie) ||
+      (client.handshake.auth?.token as string | undefined) ||
+      (client.handshake.query.token as string | undefined) ||
+      (client.handshake.headers.authorization as string | undefined)?.split(' ')[1];
 
-  const user = this.verifyToken(token);
+    const user = this.verifyToken(token);
 
-  if (!user) {
-    this.logger.warn(
-      `[CONNECTION] Rejected (invalid token): ${client.id}`,
-    );
+    if (!user) {
+      this.logger.warn(`[CONNECTION] Rejected (invalid token): ${client.id}`);
+      client.disconnect();
+      return;
+    }
 
-    client.disconnect();
-    return;
+    this.clientToUser.set(client.id, {
+      userId: user.sub || user.userId,
+      role: user.role || 'employee',
+      name: user.code || String(user.sub || user.userId),
+    });
+
+    this.logger.log(`[CONNECTION] User ${user.sub} (${user.role}) connected`);
+    client.join(`user-${user.sub}`);
+    this.broadcastOnlineUsers();
   }
-
-  this.clientToUser.set(client.id, {
-    userId: user.sub || user.userId,
-    role: user.role || 'employee',
-    name: user.code || String(user.sub || user.userId),
-  });
-
-  this.logger.log(
-    `[CONNECTION] User ${user.sub} (${user.role}) connected`,
-  );
-
-  client.join(`user-${user.sub}`);
-  this.broadcastOnlineUsers();
-}
 
   handleDisconnect(@ConnectedSocket() client: Socket) {
     const user = this.clientToUser.get(client.id);
-
     if (user) {
-      this.logger.log(
-        `[DISCONNECT] User ${user.userId} disconnected: ${client.id}`,
-      );
+      this.logger.log(`[DISCONNECT] User ${user.userId} disconnected: ${client.id}`);
       this.clientToUser.delete(client.id);
       this.broadcastOnlineUsers();
     }
@@ -123,12 +105,13 @@ export class RealtimeGateway
       name: user.name,
       role: user.role,
     }));
-
     this.server.emit('users_online', users);
   }
 
+  // ─── Channel chat (cũ) ───
+
   @SubscribeMessage('room:join')
-  handleRoomJoin(
+  async handleRoomJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { projectId: string },
   ) {
@@ -140,11 +123,20 @@ export class RealtimeGateway
 
     const { projectId } = payload;
     const room = `project-${projectId}`;
-
     client.join(room);
-    this.logger.log(
-      `[ROOM:JOIN] User ${user.userId} joined room ${room}`,
-    );
+    this.logger.log(`[ROOM:JOIN] User ${user.userId} joined room ${room}`);
+
+    try {
+      const messages = await this.chatService.getRoomMessages(projectId, 50);
+      const messagesWithChannel = messages.map((m) => ({
+        ...m,
+        channel: projectId,
+      }));
+      client.emit('messages:init', messagesWithChannel);
+      this.logger.log(`[ROOM:JOIN] Sent ${messages.length} messages to ${user.userId}`);
+    } catch (error) {
+      this.logger.error(`[ROOM:JOIN] Failed to fetch messages: ${error}`);
+    }
 
     this.realtimeService.broadcastUserOnline(projectId, user.userId, {
       id: user.userId,
@@ -160,25 +152,13 @@ export class RealtimeGateway
     @MessageBody() payload: { projectId: string },
   ) {
     const user = this.clientToUser.get(client.id);
-    if (!user) {
-      this.logger.warn(`[ROOM:LEAVE] Unknown user: ${client.id}`);
-      return { error: 'Unauthorized' };
-    }
+    if (!user) return { error: 'Unauthorized' };
 
     const { projectId } = payload;
     const room = `project-${projectId}`;
-
     client.leave(room);
-    this.logger.log(`[ROOM:LEAVE] User ${user.userId} left room ${room}`);
-
     this.realtimeService.broadcastUserOffline(projectId, user.userId);
-
     return { success: true, room };
-  }
-
-  @SubscribeMessage('ping')
-  handlePing() {
-    return { pong: true };
   }
 
   @SubscribeMessage('chat:send')
@@ -187,62 +167,87 @@ export class RealtimeGateway
     @MessageBody() payload: { projectId: string; message: string },
   ) {
     const user = this.clientToUser.get(client.id);
-    if (!user) {
-      this.logger.warn(`[CHAT:SEND] Unknown user: ${client.id}`);
-      return { error: 'Unauthorized' };
-    }
-
+    if (!user) return { error: 'Unauthorized' };
     const { projectId, message } = payload;
 
-    if (!projectId || !message?.trim()) {
-      return { error: 'Invalid payload' };
-    }
+    const savedMessage = await this.chatService.sendMessage(
+      projectId,
+      user.userId,
+      user.name,
+      message.trim(),
+    );
 
-    try {
-      await this.chatService.sendMessage(
-        projectId,
-        user.userId,
-        user.userId,
-        message.trim(),
-      );
-
-      return { success: true };
-    } catch (error) {
-      this.logger.error(`[CHAT:SEND] Failed: ${error}`);
-      return { error: error };
-    }
+    this.server.to(`project-${projectId}`).emit('chat:message', {
+      ...savedMessage,
+      channel: projectId,
+    });
+    return { success: true };
   }
 
-  @SubscribeMessage('message:send')
-  handleMessageSend(
+  // ─── Room chat (mới) ───
+
+  @SubscribeMessage('room:join_chat')
+  async handleRoomJoinChat(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { channel: string; content: string; type?: 'text' | 'system' | 'file' },
+    @MessageBody() payload: { roomId: number },
   ) {
     const user = this.clientToUser.get(client.id);
-    if (!user) {
-      this.logger.warn(`[MESSAGE:SEND] Unknown user: ${client.id}`);
-      return { error: 'Unauthorized' };
+    if (!user) return { error: 'Unauthorized' };
+
+    const { roomId } = payload;
+    const room = `chat-room-${roomId}`;
+    client.join(room);
+    this.logger.log(`[ROOM:JOIN_CHAT] User ${user.userId} joined chat-room-${roomId}`);
+
+    try {
+      const messages = await this.chatService.getRoomMessagesById(roomId);
+      client.emit('room:messages_init', messages);
+    } catch (error) {
+      this.logger.error(`[ROOM:JOIN_CHAT] Failed: ${error}`);
     }
 
-    const content = payload.content?.trim();
-    if (!payload.channel || !content) {
-      return { error: 'Invalid payload' };
-    }
-
-    const message = {
-      id: `${Date.now()}-${client.id}`,
-      channel: payload.channel,
-      senderId: user.userId,
-      senderName: user.name,
-      senderRole: user.role,
-      content,
-      timestamp: Date.now(),
-      type: payload.type || 'text',
-    };
-
-    this.server.emit('message:new', message);
-    return { success: true, message };
+    return { success: true, room };
   }
+
+  @SubscribeMessage('room:leave_chat')
+  handleRoomLeaveChat(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: number },
+  ) {
+    const user = this.clientToUser.get(client.id);
+    if (!user) return { error: 'Unauthorized' };
+
+    const room = `chat-room-${payload.roomId}`;
+    client.leave(room);
+    return { success: true };
+  }
+
+  @SubscribeMessage('room:send')
+  async handleRoomSend(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: number; content: string },
+  ) {
+    const user = this.clientToUser.get(client.id);
+    if (!user) return { error: 'Unauthorized' };
+
+    const { roomId, content } = payload;
+    if (!roomId || !content?.trim()) return { error: 'Invalid payload' };
+
+    try {
+      const saved = await this.chatService.sendRoomMessage(
+        roomId,
+        Number(user.userId),
+        user.name,
+        content.trim(),
+      );
+      return { success: true, message: saved };
+    } catch (error) {
+      this.logger.error(`[ROOM:SEND] Failed: ${error}`);
+      return { error };
+    }
+  }
+
+  // ─── Typing ───
 
   @SubscribeMessage('typing:start')
   handleTypingStart(
@@ -251,7 +256,6 @@ export class RealtimeGateway
   ) {
     const user = this.clientToUser.get(client.id);
     if (!user || !channel) return;
-
     client.broadcast.emit('typing:update', {
       userId: user.userId,
       name: user.name,
@@ -267,7 +271,6 @@ export class RealtimeGateway
   ) {
     const user = this.clientToUser.get(client.id);
     if (!user || !channel) return;
-
     client.broadcast.emit('typing:update', {
       userId: user.userId,
       name: user.name,
