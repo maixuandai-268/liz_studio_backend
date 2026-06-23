@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prettier/prettier */
+import { Projects } from '@/modules/projects/entities/project.entity';
+import { Task_Categories } from '@/modules/tasks/entities/categories.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -8,6 +10,8 @@ import {
   UpdateDateColumn,
   OneToOne,
   OneToMany,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 
 @Entity('tasks')
@@ -18,10 +22,10 @@ export class Task {
   @Column()
   project_id: number;
 
-  @Column()
-  task_code: string;
+  @Column({ nullable: true })
+  task_code: number;
 
-  @Column()
+  @Column({ nullable: true })
   title: string;
 
   @Column({ type: 'text', nullable: true })
@@ -54,6 +58,12 @@ export class Task {
   @Column({ nullable: true })
   kpi_points: number;
 
+  @Column( 'text' ,{ nullable: true , array :true })
+  imagesIllustration: string[];
+
+  @Column('text' ,{ nullable: true , array :true })
+  imagesURL: string[];
+
   @Column({ nullable: true })
   created_by: number;
 
@@ -62,4 +72,20 @@ export class Task {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => Projects,(projects) => projects.task,
+    { onDelete: 'CASCADE',},
+  )
+  @JoinColumn({ name: 'project_id', })
+  project: Projects;
+
+  @Column()
+  category_id: number;
+  @ManyToOne(() => Task_Categories,(category) => category.task,
+  )
+  @JoinColumn({
+    name: 'category_id',
+  })
+  category: Task_Categories;
+
 }

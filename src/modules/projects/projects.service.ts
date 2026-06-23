@@ -7,14 +7,20 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Project } from './entities/project.entity';
+import { Projects } from './entities/project.entity';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { Task_Categories } from '../tasks/entities/categories.entity';
+import { Task } from '../tasks/entities/task.entity';
 
 @Injectable()
 export class ProjectService {
   constructor(
-    @InjectRepository(Project)
-    private readonly projectRepo: Repository<Project>,
+    @InjectRepository(Projects)
+    private readonly projectRepo: Repository<Projects>,
+    @InjectRepository(Task_Categories)
+    private readonly categoriesRepo: Repository<Task_Categories>,
+    @InjectRepository(Task)
+    private readonly taskRepo: Repository<Task>,
   ) { }
 
   async findOne(id: number) {
@@ -27,14 +33,38 @@ export class ProjectService {
   }
 
   
-  async create(CreateProjectDto : CreateProjectDto) {
-    const existingProject = await this.projectRepo.findOneBy({ projectName: CreateProjectDto.projectName });
-    if (existingProject) {
-      throw new ConflictException(`Đã tồn tại Project với tên ${CreateProjectDto.projectName}`);
-    }
-    const newProject = this.projectRepo.create(CreateProjectDto);
-    return await this.projectRepo.save(newProject);
-  }
+  async createProject(dto: CreateProjectDto) {
+  const project = await this.projectRepo.save(
+  this.projectRepo.create({
+    projectName: dto.projectName,
+    year: dto.year,
+    backgroundImage: dto.backgroundImage,
+    clientName: dto.clientName,
+    locationName: dto.locationName,
+    description: dto.description,
+    //date
+  }),
+);
+
+for (const view of dto.views) {
+  const category = await this.categoriesRepo.findOne({
+    where: { id: view.categoryId },
+  });
+
+  if (!category) continue;
+
+  const tasks = Array.from(
+    { length: view.count },
+    (_, i) =>
+      this.taskRepo.create({
+        project,
+        category,
+      }),
+  );
+
+  await this.taskRepo.save(tasks);
+}
+}
 
   async findAll() {
     return await this.projectRepo.find({ order: { createdAt: 'DESC' } });
@@ -57,4 +87,6 @@ export class ProjectService {
     }
     return await this.projectRepo.remove(project);
   }
+
+  
 }

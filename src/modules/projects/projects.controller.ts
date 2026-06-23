@@ -8,7 +8,7 @@ import { ProjectService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
-@Controller('project')
+@Controller('projects')
 export class ProjectController {
   constructor(private readonly projectService: ProjectService) { }
 
@@ -22,7 +22,7 @@ export class ProjectController {
   @Post()
   @UsePipes(new ValidationPipe())
   create(@Body() createProjectDto: CreateProjectDto) {
-    return this.projectService.create(createProjectDto);
+    return this.projectService.createProject(createProjectDto);
   }
 
   @Get()

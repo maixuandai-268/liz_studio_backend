@@ -43,7 +43,7 @@ export class Employee {
   @UpdateDateColumn()
   updatedAt: Date;
 
-   @OneToOne(() => User)
+  @OneToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
 

@@ -20,6 +20,8 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { TaskLogsModule } from './modules/task-logs/task-logs.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { ChannelModule } from './modules/chat/channels/channel.module';
+import { UploadModule } from './modules/upload/upload.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
   imports: [
@@ -47,7 +49,9 @@ import { ChannelModule } from './modules/chat/channels/channel.module';
     TaskFormsModule,
     ActivityLogsModule,
     NotificationsModule,
-    ChannelModule
+    ChannelModule,
+    UploadModule,
+    ProjectsModule
   ],
 })
 export class AppModule {}

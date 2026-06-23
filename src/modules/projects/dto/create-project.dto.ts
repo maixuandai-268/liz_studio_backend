@@ -1,6 +1,8 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { IsString, IsNotEmpty, MinLength, IsOptional, IsNumber, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { ProjectViewDto } from './sub-project.dto';
+import { Type } from 'class-transformer';
 
 export class CreateProjectDto {
   @IsString()
@@ -32,4 +34,9 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString({ each: true })
   images?: string[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProjectViewDto)
+  views: ProjectViewDto[];
 }

@@ -1,8 +1,9 @@
 /* eslint-disable prettier/prettier */
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Task } from '@/modules/tasks/entities/task.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 
-@Entity('project')
-export class Project {
+@Entity('projects')
+export class Projects {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -21,12 +22,15 @@ export class Project {
   @Column({ type: 'text', nullable: true })
   locationName: string;
 
+  @Column({default : "active"})
+  status: 'active' | 'review' | 'completed' | 'canceled';
+
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'text', nullable: true })
-  images: string[];
-
   @CreateDateColumn()
   createdAt: Date;
+
+  @OneToMany(() => Task, (task) => task.project)
+  task: Task[];
 }
