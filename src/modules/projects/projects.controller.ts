@@ -3,12 +3,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Controller, Get, Post, Param, Patch, Delete, Body, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Param, Patch, Delete, Body, UsePipes, ValidationPipe, UseGuards } from '@nestjs/common';
 import { ProjectService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 
 @Controller('projects')
+@UseGuards(JwtAuthGuard)
 export class ProjectController {
   constructor(private readonly projectService: ProjectService) { }
 
