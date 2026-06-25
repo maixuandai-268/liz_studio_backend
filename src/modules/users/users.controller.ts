@@ -20,7 +20,7 @@ export class UserController {
   }
 } */
 
-import { Controller, Get, Req, UseGuards, Put, Delete, Param, Body, Query, Post } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards, Put, Delete, Param, Body, Query, Post, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
 import { User } from './entities/user.entity';
@@ -71,6 +71,9 @@ export class UserController {
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
   async getMe(@Req() req) {
+    if (!req.user) {
+      throw new UnauthorizedException('Not authenticated');
+    }
     const userId = req.user.id || req.user.sub;
     return await this.userService.findById(userId);
   }

@@ -22,7 +22,7 @@ export class AttendanceRecord {
   @Column({ name: 'check_in', type: 'timestamp' })
   checkIn: Date;
 
-  @Column({ name: 'check_out', type: 'timestamp' })
+  @Column({ name: 'check_out', type: 'timestamp', nullable: true })
   checkOut: Date;
 
   @Column({ length: 50, nullable: true })
@@ -33,6 +33,12 @@ export class AttendanceRecord {
 
   @Column({ name: 'working_minutes', default: 0 })
   workingMinutes: number;
+
+  @Column({ name: 'checkin_lat', type: 'decimal', precision: 10, scale: 7, nullable: true })
+  checkinLat: number;
+
+  @Column({ name: 'checkin_lng', type: 'decimal', precision: 10, scale: 7, nullable: true })
+  checkinLng: number;
 
   @Column({ name: 'evidence_url', length: 255, nullable: true })
   evidenceUrl: string;

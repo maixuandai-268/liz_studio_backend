@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { IsString, IsNotEmpty, MinLength, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsOptional, IsNumber, IsArray, ValidateNested, IsDate } from 'class-validator';
 import { ProjectViewDto } from './sub-project.dto';
 import { Type } from 'class-transformer';
 
@@ -39,4 +39,12 @@ export class CreateProjectDto {
   @ValidateNested({ each: true })
   @Type(() => ProjectViewDto)
   views: ProjectViewDto[];
+
+  @IsDate()
+  @IsOptional()
+  start_date: Date;
+
+  @IsDate()
+  @IsOptional()
+  due_date: Date;
 }

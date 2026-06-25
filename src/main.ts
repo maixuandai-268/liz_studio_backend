@@ -30,6 +30,7 @@ async function bootstrap() {
   origin: [
     "http://localhost:3001",
     "http://10.4.4.56:3001",
+    "https://lizstudio.net"
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

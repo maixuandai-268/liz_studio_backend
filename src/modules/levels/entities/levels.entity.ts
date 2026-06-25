@@ -16,7 +16,7 @@ export class Level {
   @Column({nullable :true})   
   description : string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'float', nullable: true })
   kpi_target: number;
 
   @Column({ nullable: true })

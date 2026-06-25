@@ -28,6 +28,13 @@ export class Projects {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column({ nullable: true })
+  start_date : Date;
+
+  @Column({ nullable: true })
+  due_date : Date;
+
+
   @CreateDateColumn()
   createdAt: Date;
 

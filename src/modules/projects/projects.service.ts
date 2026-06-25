@@ -42,7 +42,8 @@ export class ProjectService {
     clientName: dto.clientName,
     locationName: dto.locationName,
     description: dto.description,
-    //date
+    start_date : dto.start_date,
+    due_date : dto.due_date
   }),
 );
 
