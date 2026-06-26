@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UsePipes, ValidationPipe } from '@nestjs/common';
 import { KpiService } from './kpi.service';
 import { CreateProductTypeDto } from './dto/create-product-type.dto';
 import { UpdateProductTypeDto } from './dto/update-product-type.dto';
@@ -27,5 +27,16 @@ export class KpiController {
   @Delete('product-types/:id')
   deleteProductType(@Param('id') id: string) {
     return this.kpiService.deleteProductType(+id);
+  }
+
+  // Monthly ranking
+  @Get('ranking')
+  getMonthlyRanking(
+    @Query('year') year: string,
+    @Query('month') month: string,
+  ) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
+    return this.kpiService.getMonthlyRanking(y, m);
   }
 }

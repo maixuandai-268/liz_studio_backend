@@ -16,10 +16,12 @@ import { parse } from 'cookie';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.WS_ORIGIN || 'http://localhost:3000',
+    origin: process.env.WS_ORIGIN || 'http://localhost:3001',
     credentials: true,
   },
   transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 20000,
 })
 export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect

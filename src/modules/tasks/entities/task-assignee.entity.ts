@@ -16,8 +16,9 @@ export class TaskAssignee {
   @Column({nullable :true})   
   userId : number;
 
+  @Column({ default: false })
+  is_main: boolean;
+
   @CreateDateColumn()
   assignedAt: Date;
-
-
 }

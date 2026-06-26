@@ -5,6 +5,8 @@ import { TaskAssignee } from './entities/task-assignee.entity';
 import { TaskComment } from './entities/task-comment.entity';
 import { TaskAttachment } from './entities/task-attachment.entity';
 import { TaskActivity } from './entities/task-activity.entity';
+import { TaskKpiAllocation } from './entities/task-kpi-allocation.entity';
+import { TaskPhaseApproval } from './entities/task-phase-approval.entity';
 import { TaskChecklist } from './entities/task-checklist.entity';
 import { TasksService } from './tasks.service';
 import { RealtimeModule } from '@/modules/realtime/realtime.module';
@@ -27,6 +29,8 @@ import { TasksChecklistsService } from './sub-resources/tasks-checklists.service
       TaskActivity,
       TaskChecklist,
       Task_Categories,
+      TaskKpiAllocation,
+      TaskPhaseApproval,
       Projects,
       Employee
     ]),

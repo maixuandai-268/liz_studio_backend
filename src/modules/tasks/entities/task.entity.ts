@@ -58,6 +58,12 @@ export class Task {
   @Column({ nullable: true })
   kpi_points: number;
 
+  @Column({ default: false })
+  pending_approval: boolean;
+
+  @Column({ nullable: true })
+  previous_phase: string;
+
   @Column( 'text' ,{ nullable: true , array :true })
   imagesIllustration: string[];
 

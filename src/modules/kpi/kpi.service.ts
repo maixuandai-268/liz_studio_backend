@@ -1,7 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KpiProductType } from './entities/kpi-product-type.entity';
+import { EmployeeKpi } from './entities/employee-kpi.entity';
+import { KpiMonthlySummary } from './entities/kpi-monthly-summary.entity';
 import { CreateProductTypeDto } from './dto/create-product-type.dto';
 import { UpdateProductTypeDto } from './dto/update-product-type.dto';
 
@@ -12,6 +14,12 @@ export class KpiService {
   constructor(
     @InjectRepository(KpiProductType)
     private productTypeRepo: Repository<KpiProductType>,
+
+    @InjectRepository(EmployeeKpi)
+    private kpiRecordRepo: Repository<EmployeeKpi>,
+
+    @InjectRepository(KpiMonthlySummary)
+    private monthlySummaryRepo: Repository<KpiMonthlySummary>,
   ) {}
 
   // ── Product Types ──
@@ -41,5 +49,24 @@ export class KpiService {
     const result = await this.productTypeRepo.delete(id);
     if (result.affected === 0) throw new NotFoundException(`Product type ${id} not found`);
     this.logger.log(`[DELETE] Product type ${id}`);
+  }
+
+  // ── Monthly rankings ──
+
+  async getMonthlyRanking(year: number, month: number) {
+    const summaries = await this.monthlySummaryRepo.find({
+      where: { year, month },
+      relations: ['user'] as any,
+      order: { totalPoints: 'DESC' } as any,
+    });
+
+    return summaries.map((s, i) => ({
+      rank: i + 1,
+      userId: s.userId,
+      fullName: (s.user as any)?.full_name || `User #${s.userId}`,
+      totalPoints: Number(s.totalPoints) || 0,
+      targetPoints: Number(s.targetPoints) || 0,
+      productivityPercent: Number(s.productivityPercent) || 0,
+    }));
   }
 }

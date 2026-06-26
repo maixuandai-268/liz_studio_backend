@@ -19,6 +19,11 @@ export class TaskController {
       return await this.taskService.getCategory();
   }
 
+  @Get()
+  getAll() {
+    return this.taskService.getAllTasks();
+  }
+
   @Post()
   create(@Body() createTaskDto: any) {
     // FE sends project_id inside body
@@ -68,13 +73,13 @@ export class TaskController {
     return this.taskService.deleteTask(id, projectId);
   }
 
-  // Assign member to task
+  // Assign member to task (with isMain)
   @Post(':id/assign')
   async assignTask(
     @Param('id') id: string,
-    @Body() body: { userId: number },
+    @Body() body: { userId: number; isMain?: boolean },
   ) {
-    return this.taskService.assignTask(id, body.userId);
+    return this.taskService.assignTask(id, body.userId, body.isMain ?? false);
   }
 
   // Unassign member from task
@@ -96,5 +101,64 @@ export class TaskController {
   @Get('employees/all')
   async getEmployees() {
     return this.taskService.getEmployees();
+  }
+
+  // ── Phase Approval Flow ──
+
+  @Post(':id/request-phase')
+  async requestPhase(
+    @Param('id') id: string,
+    @Body() body: { userId: number },
+  ) {
+    return this.taskService.requestPhase(id, body.userId);
+  }
+
+  @Post(':id/approve-phase')
+  async approvePhase(
+    @Param('id') id: string,
+    @Body() body: { reviewerId?: number },
+  ) {
+    return this.taskService.approvePhase(id, body.reviewerId);
+  }
+
+  @Post(':id/request-revision')
+  async requestRevision(
+    @Param('id') id: string,
+    @Body() body: { userId: number; reason: string },
+  ) {
+    return this.taskService.requestRevision(id, body.userId, body.reason);
+  }
+
+  @Get(':id/phase-approvals')
+  async getPhaseApprovals(@Param('id') id: string) {
+    return this.taskService.getPhaseApprovals(id);
+  }
+
+  @Post(':id/revision-completed')
+  async revisionCompleted(@Param('id') id: string) {
+    return this.taskService.revisionCompleted(id);
+  }
+
+  // ── KPI Allocation ──
+
+  @Get(':id/kpi')
+  async getTaskKpi(@Param('id') id: string) {
+    return this.taskService.getTaskKpi(id);
+  }
+
+  @Get(':id/kpi/phase/:phase')
+  async getPhaseKpiInfo(
+    @Param('id') id: string,
+    @Param('phase') phase: string,
+  ) {
+    return this.taskService.getPhaseKpiInfo(id, phase);
+  }
+
+  @Post(':id/kpi/allocate')
+  async allocatePhaseKpi(
+    @Param('id') id: string,
+    @Body() body: { phase: string; allocations: { userId: number; points: number }[] },
+  ) {
+    return this.taskService.allocatePhaseKpi(id, body.phase, body.allocations);
   }
 }
