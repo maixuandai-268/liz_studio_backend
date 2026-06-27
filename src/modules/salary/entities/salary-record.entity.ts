@@ -32,16 +32,28 @@ export class SalaryRecord {
   kpi_target: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  kpi_salary: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   productivity_percentage: number;
 
-    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-    gross_salary: number;
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  gross_salary: number;
 
-    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-    deductions: number;
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  deductions: number;
 
-    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-    net_salary: number;
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  kpi_component: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  bonus: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  penalty: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  net_salary: number;
 
     @Column({ default: 'pending' })
     status: string;

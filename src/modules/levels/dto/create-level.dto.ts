@@ -16,5 +16,10 @@ export class CreateLevelDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  kpi_salary?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   salary_coefficient?: number;
 }

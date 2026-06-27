@@ -39,8 +39,6 @@ export class LevelsService implements OnModuleInit {
     await this.levelRepo.delete(id);
   }
 
-  // ─── Seed default levels ───
-
   async seedDefaults(): Promise<void> {
     const count = await this.levelRepo.count();
     if (count > 0) {
@@ -49,12 +47,12 @@ export class LevelsService implements OnModuleInit {
     }
 
     const defaults: Partial<Level>[] = [
-      { name: 'Fresher', kpi_target: 6.2, salary_coefficient: 1.0, description: 'Entry level' },
-      { name: 'Junior 1', kpi_target: 7.2, salary_coefficient: 1.1, description: 'Junior tier 1' },
-      { name: 'Junior 2', kpi_target: 8.4, salary_coefficient: 1.2, description: 'Junior tier 2' },
-      { name: 'Pre Mid-Level', kpi_target: 11.6, salary_coefficient: 1.4, description: 'Pre Mid-Level' },
-      { name: 'Mid-Level', kpi_target: 15.8, salary_coefficient: 1.6, description: 'Mid-Level' },
-      { name: 'Senior', kpi_target: 22.4, salary_coefficient: 2.0, description: 'Senior level' },
+      { name: 'Fresher', kpi_target: 6.2, kpi_salary: 0, salary_coefficient: 1.0, description: 'Entry level' },
+      { name: 'Junior 1', kpi_target: 7.2, kpi_salary: 0, salary_coefficient: 1.1, description: 'Junior tier 1' },
+      { name: 'Junior 2', kpi_target: 8.4, kpi_salary: 0, salary_coefficient: 1.2, description: 'Junior tier 2' },
+      { name: 'Pre Mid-Level', kpi_target: 11.6, kpi_salary: 0, salary_coefficient: 1.4, description: 'Pre Mid-Level' },
+      { name: 'Mid-Level', kpi_target: 15.8, kpi_salary: 0, salary_coefficient: 1.6, description: 'Mid-Level' },
+      { name: 'Senior', kpi_target: 22.4, kpi_salary: 0, salary_coefficient: 2.0, description: 'Senior level' },
     ];
 
     for (const d of defaults) {

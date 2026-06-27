@@ -16,8 +16,11 @@ export class SalaryPeriod {
     @Column({ nullable: true })
     month: number;
 
-    @Column({ nullable: true })
+        @Column({ nullable: true })
     year: number;
+
+    @Column({ nullable: true })
+    quarter: number;
 
     @Column({ nullable: true })
     pay_date: Date;

@@ -34,6 +34,9 @@ export class Employee {
   @Column({ nullable: true })
   level_id: number;
 
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true, default: null })
+  base_salary: number;
+
   @Column({ nullable: true })
   hire_date: Date;
 

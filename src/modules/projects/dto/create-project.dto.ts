@@ -41,10 +41,12 @@ export class CreateProjectDto {
   views: ProjectViewDto[];
 
   @IsDate()
+  @Type(() => Date)
   @IsOptional()
   start_date: Date;
 
   @IsDate()
+  @Type(() => Date)
   @IsOptional()
   due_date: Date;
 }

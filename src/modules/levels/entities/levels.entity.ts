@@ -19,6 +19,9 @@ export class Level {
   @Column({ type: 'float', nullable: true })
   kpi_target: number;
 
+  @Column({ type: 'float', nullable: true, default: 0 })
+  kpi_salary: number;
+
   @Column({ nullable: true })
   salary_coefficient: number;
 }

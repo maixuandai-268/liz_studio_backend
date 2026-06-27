@@ -41,6 +41,7 @@ export class ProjectService {
     backgroundImage: dto.backgroundImage,
     clientName: dto.clientName,
     locationName: dto.locationName,
+    images : dto.images,
     description: dto.description,
     start_date : dto.start_date,
     due_date : dto.due_date

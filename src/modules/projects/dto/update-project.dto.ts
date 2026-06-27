@@ -1,8 +1,14 @@
-/* eslint-disable prettier/prettier */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateProjectDto } from './create-project.dto';
+import { IsEnum, IsOptional } from 'class-validator';
 
-export class UpdateProjectDto extends PartialType(CreateProjectDto) {
-    
+export enum ProjectStatus {
+  ACTIVE = 'active',
+  REVIEW = 'review',
+  COMPLETED = 'completed',
+  CANCELED = 'canceled',
+}
+
+export class UpdateProjectDto {
+  @IsOptional()
+  @IsEnum(ProjectStatus)
+  status?: ProjectStatus;
 }

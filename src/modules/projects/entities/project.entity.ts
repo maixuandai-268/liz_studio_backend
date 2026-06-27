@@ -1,3 +1,4 @@
+import { IsArray } from 'class-validator';
 /* eslint-disable prettier/prettier */
 import { Task } from '@/modules/tasks/entities/task.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
@@ -27,6 +28,9 @@ export class Projects {
 
   @Column({ type: 'text', nullable: true })
   description: string;
+
+  @Column('text' ,{ nullable: true , array :true })
+  images: string[];
 
   @Column({ nullable: true })
   start_date : Date;
