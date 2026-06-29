@@ -10,6 +10,10 @@ export class Task_Categories {
   @Column({nullable: true})
   tittle: string;
 
+  @Column({nullable: true})
+  categoryColor: string;
+
+
   @OneToMany(() => Task, (task) => task.category)
   task: Task[];
 }

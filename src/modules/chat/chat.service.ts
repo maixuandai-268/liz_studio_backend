@@ -122,22 +122,25 @@ export class ChatService {
 
   // ─── Group: create room ───
 
-  async createGroupRoom(name: string, createdBy: number, participantIds: number[]) {
+  async createGroupRoom(name: string, createdBy: number, participantIds: number[], projectId?: number) {
     const room = this.chatRoomRepository.create({
       name,
+      projectId,
       isGroup: true,
       createdBy,
-    });
-    const saved = await this.chatRoomRepository.save(room);
+    } as any);
+    const saved = (await this.chatRoomRepository.save(room)) as unknown as ChatRoom;
 
-    const allUserIds = [...new Set([createdBy, ...participantIds])];
-    await this.participantRepository.save(
-      allUserIds.map((uid) =>
-        this.participantRepository.create({ roomId: saved.id, userId: uid }),
-      ),
-    );
+    const allUserIds = [...new Set([createdBy, ...participantIds])].filter(uid => uid > 0);
+    if (allUserIds.length > 0) {
+      await this.participantRepository.save(
+        allUserIds.map((uid) =>
+          this.participantRepository.create({ roomId: (saved as any).id, userId: uid }),
+        ),
+      );
+    }
 
-    this.logger.log(`[CHAT] Group room created: ${saved.id} — ${name}`);
+    this.logger.log(`[CHAT] Group room created: ${(saved as any).id} — ${name}`);
     return saved;
   }
 
@@ -167,6 +170,7 @@ export class ChatService {
         return {
           id: room.id,
           name: room.name,
+          projectId: room.projectId,
           isGroup: room.isGroup,
           createdBy: room.createdBy,
           createdAt: room.createdAt,
@@ -233,6 +237,16 @@ export class ChatService {
     }));
   }
 
+  // ─── Get room by project ───
+
+  async getRoomByProject(projectId: number) {
+    const room = await this.chatRoomRepository.findOne({
+      where: { projectId } as any,
+    });
+    if (!room) throw new Error('Room not found');
+    return room;
+  }
+
   // ─── Kiểm tra user có trong room ───
 
   async isUserInRoom(roomId: number, userId: number): Promise<boolean> {
@@ -240,5 +254,47 @@ export class ChatService {
       where: { roomId, userId },
     });
     return count > 0;
+  }
+
+  // ─── Add participant ───
+
+  async addParticipant(roomId: number, userId: number) {
+    const exists = await this.participantRepository.count({ where: { roomId, userId } });
+    if (exists) return { alreadyMember: true };
+
+    await this.participantRepository.save(
+      this.participantRepository.create({ roomId, userId }),
+    );
+    this.logger.log(`[CHAT] User ${userId} added to room ${roomId}`);
+
+    // Notify room
+    this.realtimeService.emitRoomMessage(String(roomId), {
+      id: `sys-${Date.now()}`,
+      roomId,
+      userId: 0,
+      userName: 'System',
+      content: `User #${userId} joined the room`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return { success: true };
+  }
+
+  // ─── Remove participant ───
+
+  async removeParticipant(roomId: number, userId: number) {
+    const result = await this.participantRepository.delete({ roomId, userId });
+    this.logger.log(`[CHAT] User ${userId} removed from room ${roomId}`);
+
+    this.realtimeService.emitRoomMessage(String(roomId), {
+      id: `sys-${Date.now()}`,
+      roomId,
+      userId: 0,
+      userName: 'System',
+      content: `User #${userId} left the room`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return { affected: result.affected };
   }
 }

@@ -41,17 +41,18 @@ export class TasksService {
     private taskLogsService: TaskLogsService,
   ) {}
 
-  // ── Phase Approval Flow ──
 
   private readonly PHASE_ORDER = ['todo', 'wip', 'review', 'v1', 'v2', 'v3', 'done'];
 
-  async requestPhase(taskId: string, userId: number) {
+  async requestPhase(taskId: string, userId: number, targetPhase?: string) {
     const task = await this.getTask(taskId);
-    const currentIdx = this.PHASE_ORDER.indexOf(task.status);
-    if (currentIdx < 0 || currentIdx >= this.PHASE_ORDER.length - 1) {
-      throw new BadRequestException('Không thể chuyển phase từ trạng thái hiện tại');
-    }
-    const nextPhase = this.PHASE_ORDER[currentIdx + 1];
+    const nextPhase = targetPhase || (() => {
+      const idx = this.PHASE_ORDER.indexOf(task.status);
+      if (idx < 0 || idx >= this.PHASE_ORDER.length - 1) {
+        throw new BadRequestException('Không thể chuyển phase từ trạng thái hiện tại');
+      }
+      return this.PHASE_ORDER[idx + 1];
+    })();
 
     const approval = this.phaseApprovalRepo.create({
       taskId: Number(taskId),
@@ -81,44 +82,170 @@ export class TasksService {
     return { task: fullTask, approval };
   }
 
-  async approvePhase(taskId: string, reviewerId?: number) {
-    const task = await this.getTask(taskId);
-    if (!task.pending_approval) {
-      throw new BadRequestException('Task không có yêu cầu duyệt nào');
-    }
-
-    const approval = await this.phaseApprovalRepo.findOne({
-      where: { taskId: Number(taskId), status: 'pending' } as any,
-      order: { createdAt: 'DESC' } as any,
-    });
-
-    if (!approval) {
-      throw new NotFoundException('Không tìm thấy yêu cầu duyệt');
-    }
-
-    approval.status = 'approved';
-    approval.reviewed_by = reviewerId || 0;
-    approval.reviewed_at = new Date();
-    await this.phaseApprovalRepo.save(approval as any);
-
-    task.pending_approval = false;
-    task.previous_phase = null;
-    await this.taskRepository.save(task as any);
-
-    await this.taskLogsService.createLog(
-      String(task.project_id),
-      taskId,
-      'phase_approved',
-      String(reviewerId || 'system'),
-      'Admin',
-      [{ field: 'phase', oldValue: task.status, newValue: task.status }],
+  private async recalculateAllKpi(taskId: number) {
+    // Delete all existing KPI allocations for this task
+    await this.kpiAllocRepo.delete({ taskId } as any);
+    await this.taskRepository.manager.connection.query(
+      `DELETE FROM employee_kpis WHERE task_id = $1`,
+      [taskId],
     );
-
-    const fullTask = await this.getTask(taskId);
-    this.realtimeService.emitTaskEvent(String(task.project_id), 'updated', fullTask);
-
-    return { task: fullTask, approval };
   }
+
+  private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus: string) {
+    const vPhases = ['v1', 'v2', 'v3'];
+    const storyPoints = Number(task.story_points) || 0;
+    if (storyPoints <= 0) return;
+
+    // Determine which phases to allocate
+    const phasesToAllocate: string[] = [];
+
+    if (newStatus === 'done') {
+      // Skipped from review or earlier → allocate all v1+v2+v3
+      if (oldStatus === 'review' || oldStatus === 'wip' || oldStatus === 'todo') {
+        phasesToAllocate.push('v1', 'v2', 'v3');
+      } else if (oldStatus === 'v1') {
+        phasesToAllocate.push('v1', 'v2', 'v3');
+      } else if (oldStatus === 'v2') {
+        phasesToAllocate.push('v2', 'v3');
+      } else if (oldStatus === 'v3') {
+        phasesToAllocate.push('v3');
+      }
+    } else if (vPhases.includes(newStatus)) {
+      // Approved a specific v-phase
+      phasesToAllocate.push(newStatus);
+    }
+
+    if (phasesToAllocate.length === 0) return;
+
+    const taskIdNum = task.id;
+    const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } as any });
+    if (assignees.length === 0) return;
+
+    const mainAssignee = assignees.find((a) => a.is_main);
+
+    for (const phase of phasesToAllocate) {
+      const poolRatio = this.PHASE_POOLS[phase] || 0;
+      const poolMax = Math.round(storyPoints * poolRatio * 100) / 100;
+
+      // Check if already allocated for this phase
+      const existingAllocs = await this.kpiAllocRepo.find({ where: { taskId: taskIdNum, phase } as any });
+      if (existingAllocs.length > 0) continue; // already allocated (e.g. via manual UI), skip
+
+      const savedAllocs: TaskKpiAllocation[] = [];
+
+      // Give the pool to main assignee (admin can later re-allocate via UI)
+      if (mainAssignee) {
+        const mainAlloc = this.kpiAllocRepo.create({
+          taskId: taskIdNum,
+          userId: mainAssignee.userId,
+          phase,
+          points: poolMax,
+          is_main: true,
+        } as any);
+        savedAllocs.push(await this.kpiAllocRepo.save(mainAlloc) as unknown as TaskKpiAllocation);
+      }
+
+      if (savedAllocs.length > 0) {
+        await this.writeKpiRecords(taskIdNum, phase, savedAllocs, task.category_id);
+      }
+    }
+  }
+
+  async approvePhase(
+  taskId: string,
+  reviewerId?: number,
+  targetStatus?: string,
+) {
+  const task = await this.getTask(taskId);
+
+  if (!task.pending_approval) {
+    throw new BadRequestException(
+      'Task không có yêu cầu duyệt',
+    );
+  }
+
+  const approval = await this.phaseApprovalRepo.findOne({
+    where: {
+      taskId: Number(taskId),
+      status: 'pending',
+    } as any,
+    order: {
+      createdAt: 'DESC',
+    } as any,
+  });
+
+  if (!approval) {
+    throw new NotFoundException(
+      'Không tìm thấy yêu cầu duyệt',
+    );
+  }
+
+  const oldStatus = task.status;
+
+  approval.status = 'approved';
+  approval.reviewed_by = reviewerId || 0;
+  approval.reviewed_at = new Date();
+
+  await this.phaseApprovalRepo.save(
+    approval as any,
+  );
+
+  task.pending_approval = false;
+  task.previous_phase = null;
+
+  if (targetStatus) {
+    task.status = targetStatus;
+  }
+
+  await this.taskRepository.save(task as any);
+
+  await this.taskLogsService.createLog(
+    String(task.project_id),
+    taskId,
+    'phase_approved',
+    String(reviewerId || 'system'),
+    'Admin',
+    [
+      {
+        field: 'phase',
+        oldValue: oldStatus,
+        newValue: task.status,
+      },
+    ],
+  );
+
+  // Auto-allocate KPI when approving a V1/V2/V3 phase or skipping to done
+  await this.autoAllocateKpiOnApproval(task, task.status, oldStatus);
+
+  const fullTask = await this.getTask(taskId);
+
+  this.realtimeService.emitTaskEvent(
+    String(task.project_id),
+    'updated',
+    fullTask,
+  );
+
+  this.realtimeService.emitTaskEvent(
+    String(task.project_id),
+    'moved',
+    {
+      id: fullTask.id,
+      title: fullTask.title,
+      oldStatus,
+      newStatus: task.status,
+      movedAt: new Date().toISOString(),
+    },
+  );
+
+  this.logger.log(
+    `[TASK] Approved: ${taskId} ${oldStatus} -> ${task.status}`,
+  );
+
+  return {
+    task: fullTask,
+    approval,
+  };
+}
 
   async requestRevision(taskId: string, userId: number, reason: string) {
     const task = await this.getTask(taskId);
@@ -144,8 +271,8 @@ export class TasksService {
     task.status = revertPhase;
     task.pending_approval = false;
     task.previous_phase = null;
-    (task as any).revision_requested = true;
-    (task as any).revision_reason = reason;
+    task.revision_requested = true;
+    task.revision_reason = reason;
     await this.taskRepository.save(task as any);
 
     await this.taskLogsService.createLog(
@@ -166,12 +293,12 @@ export class TasksService {
   
   async revisionCompleted(taskId: string) {
     const task = await this.getTask(taskId);
-    if (!(task as any).revision_requested) {
+    if (!task.revision_requested) {
       throw new BadRequestException('Task không có yêu cầu sửa nào');
     }
 
-    (task as any).revision_requested = false;
-    (task as any).revision_reason = null;
+    task.revision_requested = false;
+    task.revision_reason = null;
     task.pending_approval = false;
     await this.taskRepository.save(task as any);
 
@@ -225,6 +352,7 @@ export class TasksService {
 
     const task = await this.taskRepository.findOne({
       where: { id: taskIdNum } as any,
+      relations: { category: true, project: true } as any,
     });
 
     if (!task) {
@@ -262,6 +390,7 @@ export class TasksService {
       order: {
         createdAt: 'DESC',
       } as any,
+      relations: { category: true, project: true } as any,
     });
 
     // Attach assignee info for each task
@@ -279,7 +408,8 @@ export class TasksService {
             };
           }),
         );
-        return { ...task, assignees: assigneeInfos };
+        const attachments = await this.attachmentRepository.find({ where: { taskId: task.id } as any });
+        return { ...task, assignees: assigneeInfos, attachments };
       }),
     );
 
@@ -299,6 +429,8 @@ export class TasksService {
       const oldValues = { ...task };
 
       Object.assign(task, updateTaskDto);
+      // Clear relation object so TypeORM uses FK column value
+      if ('category_id' in updateTaskDto) (task as any).category = null;
       const updated = (await this.taskRepository.save(task)) as Task;
 
       const changes = [];
@@ -310,6 +442,11 @@ export class TasksService {
             newValue: updateTaskDto[key],
           });
         }
+      }
+
+      // If story_points changed, recalculate all KPI allocations for this task
+      if ('story_points' in updateTaskDto && oldValues['story_points'] !== updateTaskDto['story_points']) {
+        await this.recalculateAllKpi(task.id);
       }
 
       await this.taskLogsService.createLog(
@@ -334,42 +471,101 @@ export class TasksService {
     }
   }
 
-  async moveTask(
-    taskId: string,
-    moveDto: { status: string },
-    projectId?: string,
-  ) {
-    try {
-      const task = await this.getTask(taskId);
-      const resolvedProjectId = projectId || String(task.project_id);
-      const oldStatus = task.status;
+async moveTask(
+  taskId: string,
+  moveDto: { status: string },
+  userId: number,
+  role: string,
+  projectId?: string,
+) {
+  try {
+    const task = await this.getTask(taskId);
 
-      task.status = moveDto.status;
+    const resolvedProjectId = projectId || String(task.project_id);
+    const oldStatus = task.status;
+    const newStatus = moveDto.status;
 
-      const updated = (await this.taskRepository.save(task)) as unknown as Task;
+    if (role === 'admin') {
+      if (task.pending_approval) {
+        task.pending_approval = false;
+      }
+      task.status = newStatus;
+      const updated = await this.taskRepository.save(task as any);
 
-      // Fetch full task with assignees for realtime update
-      const fullTask = await this.getTask(String(updated.id));
+      await this.taskLogsService.createLog(
+        resolvedProjectId,
+        taskId,
+        'phase_changed',
+        String(userId),
+        role,
+        [{ field: 'phase', oldValue: oldStatus, newValue: newStatus }],
+      );
 
+      // Auto-allocate KPI if moving into a v-phase or done
+      await this.autoAllocateKpiOnApproval(task, newStatus, oldStatus);
+
+      const fullTask = await this.getTask(taskId);
       this.realtimeService.emitTaskEvent(resolvedProjectId, 'updated', fullTask);
       this.realtimeService.emitTaskEvent(resolvedProjectId, 'moved', {
-        id: updated.id,
-        title: updated.title,
+        id: fullTask.id,
+        title: fullTask.title,
         oldStatus,
-        newStatus: updated.status,
+        newStatus,
         movedAt: new Date().toISOString(),
       });
-
-      this.logger.log(
-        `[TASK] Moved: ${updated.id} from ${oldStatus} to ${updated.status}`,
-      );
-      return updated;
-    } catch (error) {
-      this.logger.error(`[TASK] Move failed: ${error}`);
-      throw error;
+      this.logger.log(`[TASK] ${taskId}: ${oldStatus} -> ${newStatus}`);
+      return fullTask;
     }
-  }
 
+    task.status = newStatus;
+
+    const updated = await this.taskRepository.save(task as any);
+
+    await this.taskLogsService.createLog(
+      resolvedProjectId,
+      taskId,
+      'phase_changed',
+      String(userId),
+      role,
+      [
+        {
+          field: 'phase',
+          oldValue: oldStatus,
+          newValue: newStatus,
+        },
+      ],
+    );
+
+    const fullTask = await this.getTask(taskId);
+
+    this.realtimeService.emitTaskEvent(
+      resolvedProjectId,
+      'updated',
+      fullTask,
+    );
+
+    this.realtimeService.emitTaskEvent(
+      resolvedProjectId,
+      'moved',
+      {
+        id: fullTask.id,
+        title: fullTask.title,
+        oldStatus,
+        newStatus,
+        movedAt: new Date().toISOString(),
+      },
+    );
+
+    this.logger.log(
+      `[TASK] ${taskId}: ${oldStatus} -> ${newStatus}`,
+    );
+
+    return fullTask;
+  } catch (err) {
+    this.logger.error(err);
+    throw err;
+  }
+}
   async deleteTask(taskId: string, projectId?: string) {
     try {
       const task = await this.getTask(taskId);
@@ -456,29 +652,35 @@ export class TasksService {
     const poolRatio = this.PHASE_POOLS[phase] || 0;
     const poolMax = Math.round(totalPoints * poolRatio * 100) / 100;
 
-    const existingAllocs = await this.kpiAllocRepo.find({ where: { taskId: taskIdNum, phase } as any });
-    const alreadyAllocated = existingAllocs.reduce((s, a) => s + Number(a.points), 0);
-
-    const supporterAllocs = allocations.filter(
-      (a) => a.userId !== task.created_by,
-    );
-    const totalSupporterPoints = supporterAllocs.reduce((s, a) => s + a.points, 0);
-    const grandTotal = alreadyAllocated + totalSupporterPoints;
-
-    if (grandTotal > poolMax) {
-      throw new Error(
-        `Tổng điểm (${grandTotal}) vượt quá pool (${poolMax}) cho phase ${phase}`,
+    // Delete old allocations for this phase first (re-allocate)
+    const oldAllocs = await this.kpiAllocRepo.find({ where: { taskId: taskIdNum, phase } as any });
+    if (oldAllocs.length > 0) {
+      await this.kpiAllocRepo.delete({ taskId: taskIdNum, phase } as any);
+      // Also clean employee_kpis
+      await this.taskRepository.manager.connection.query(
+        `DELETE FROM employee_kpis WHERE task_id = $1 AND phase = $2`,
+        [taskIdNum, phase],
       );
     }
 
-    const mainPoints = Math.round((poolMax - totalSupporterPoints - alreadyAllocated) * 100) / 100;
+    // Find main assignee
+    const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } as any });
+    const mainAssignee = assignees.find((a) => a.is_main);
+    const supportAssignees = assignees.filter((a) => !a.is_main);
+
+    if (!mainAssignee && supportAssignees.length === 0) return { phase, poolMax, allocated: { main: 0, supporters: [] }, savedAllocs: [] };
+
+    // Build allocation: main gets pool - supporters, supporters get their requested amounts
+    const mainPoints = mainAssignee
+      ? Math.round((poolMax - allocations.reduce((s, a) => s + a.points, 0)) * 100) / 100
+      : 0;
 
     const savedAllocs: TaskKpiAllocation[] = [];
 
-    if (mainPoints > 0) {
+    if (mainAssignee && mainPoints > 0) {
       const mainAlloc = this.kpiAllocRepo.create({
         taskId: taskIdNum,
-        userId: task.created_by,
+        userId: mainAssignee.userId,
         phase,
         points: mainPoints,
         is_main: true,
@@ -486,7 +688,8 @@ export class TasksService {
       savedAllocs.push(await this.kpiAllocRepo.save(mainAlloc) as unknown as TaskKpiAllocation);
     }
 
-    for (const alloc of supporterAllocs) {
+    for (const alloc of allocations) {
+      if (alloc.points <= 0) continue;
       const suppAlloc = this.kpiAllocRepo.create({
         taskId: taskIdNum,
         userId: alloc.userId,
@@ -497,9 +700,11 @@ export class TasksService {
       savedAllocs.push(await this.kpiAllocRepo.save(suppAlloc) as unknown as TaskKpiAllocation);
     }
 
-    await this.writeKpiRecords(taskIdNum, phase, savedAllocs, task.category_id);
+    if (savedAllocs.length > 0) {
+      await this.writeKpiRecords(taskIdNum, phase, savedAllocs, task.category_id);
+    }
 
-    return { phase, poolMax, allocated: { main: mainPoints, supporters: supporterAllocs }, savedAllocs };
+    return { phase, poolMax, allocated: { main: mainPoints, supporters: allocations }, savedAllocs };
   }
 
   private async writeKpiRecords(
@@ -524,6 +729,27 @@ export class TasksService {
         ],
       );
     }
+  }
+
+  async addAttachment(taskId: string, userId: number, url: string, name?: string) {
+    const attachment = this.attachmentRepository.create({
+      taskId: Number(taskId),
+      userId,
+      file_url: url,
+      file_name: name || url.split('/').pop() || 'link',
+      file_type: 'link',
+    } as any);
+    const saved = await this.attachmentRepository.save(attachment);
+
+    const fullTask = await this.getTask(taskId);
+    this.realtimeService.emitTaskEvent(String(fullTask.project_id), 'updated', fullTask);
+
+    return saved;
+  }
+
+  async removeAttachment(attachId: number) {
+    await this.attachmentRepository.delete(attachId);
+    return { success: true };
   }
 
   async getTaskKpi(taskId: string) {

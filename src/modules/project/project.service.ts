@@ -1,4 +1,3 @@
-import { CreateProjectDto } from './dto/create-project.dto';
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -8,6 +7,7 @@ import { Injectable, ConflictException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from './project.entity';
+import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
 @Injectable()
@@ -26,7 +26,6 @@ export class ProjectService {
     return project;
   }
 
-  
   async create(CreateProjectDto : CreateProjectDto) {
     const existingProject = await this.projectRepo.findOneBy({ projectName: CreateProjectDto.projectName });
     if (existingProject) {

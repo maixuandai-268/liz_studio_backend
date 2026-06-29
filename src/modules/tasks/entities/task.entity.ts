@@ -64,6 +64,12 @@ export class Task {
   @Column({ nullable: true })
   previous_phase: string;
 
+  @Column({ nullable: true, default: false })
+  revision_requested: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  revision_reason: string;
+
   @Column( 'text' ,{ nullable: true , array :true })
   imagesIllustration: string[];
 

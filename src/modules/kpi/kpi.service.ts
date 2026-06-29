@@ -54,19 +54,41 @@ export class KpiService {
   // ── Monthly rankings ──
 
   async getMonthlyRanking(year: number, month: number) {
-    const summaries = await this.monthlySummaryRepo.find({
-      where: { year, month },
-      relations: ['user'] as any,
-      order: { totalPoints: 'DESC' } as any,
-    });
+    // Aggregate KPI points per user for the month from employee_kpis
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-    return summaries.map((s, i) => ({
+    const userId = 'user_id';
+    const raw = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT ${userId}, SUM(points) as total_points
+       FROM employee_kpis
+       WHERE achieved_date >= $1 AND achieved_date <= $2
+       GROUP BY ${userId}
+       ORDER BY total_points DESC`,
+      [startDate, endDate],
+    );
+
+    const employees = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT u.id as user_id, COALESCE(e.full_name, u.full_name) as full_name
+       FROM users u
+       LEFT JOIN employee e ON e.user_id = u.id`,
+    );
+    const empMap = new Map(employees.map((e: any) => [Number(e.user_id), e.full_name]));
+
+    const levels = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT l.user_id, l.kpi_target FROM level l`,
+    );
+    const levelMap = new Map(levels.map((l: any) => [l.user_id, Number(l.kpi_target) || 100]));
+
+    return raw.map((r: any, i: number) => ({
       rank: i + 1,
-      userId: s.userId,
-      fullName: (s.user as any)?.full_name || `User #${s.userId}`,
-      totalPoints: Number(s.totalPoints) || 0,
-      targetPoints: Number(s.targetPoints) || 0,
-      productivityPercent: Number(s.productivityPercent) || 0,
+      userId: Number(r.user_id),
+      fullName: empMap.get(Number(r.user_id)) || `User #${r.user_id}`,
+      totalPoints: Number(r.total_points) || 0,
+      targetPoints: levelMap.get(Number(r.user_id)) || 100,
+      productivityPercent: levelMap.get(Number(r.user_id))
+        ? Math.min(Math.round((Number(r.total_points) / (levelMap.get(Number(r.user_id)) as number)) * 10000) / 100, 200)
+        : 0,
     }));
   }
 }

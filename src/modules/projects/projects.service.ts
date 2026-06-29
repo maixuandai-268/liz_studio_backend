@@ -4,13 +4,14 @@ import { CreateProjectDto } from './dto/create-project.dto';
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Projects } from './entities/project.entity';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { Task_Categories } from '../tasks/entities/categories.entity';
 import { Task } from '../tasks/entities/task.entity';
+import { ChatService } from '@/modules/chat/chat.service';
 
 @Injectable()
 export class ProjectService {
@@ -21,6 +22,7 @@ export class ProjectService {
     private readonly categoriesRepo: Repository<Task_Categories>,
     @InjectRepository(Task)
     private readonly taskRepo: Repository<Task>,
+    private chatService: ChatService,
   ) { }
 
   async findOne(id: number) {
@@ -33,8 +35,9 @@ export class ProjectService {
   }
 
   
-  async createProject(dto: CreateProjectDto) {
-  const project = await this.projectRepo.save(
+  async createProject(dto: CreateProjectDto , id : number) {
+    const userCreateId = id
+    const project = await this.projectRepo.save(
   this.projectRepo.create({
     projectName: dto.projectName,
     year: dto.year,
@@ -66,6 +69,19 @@ for (const view of dto.views) {
 
   await this.taskRepo.save(tasks);
 }
+
+  try {
+    await this.chatService.createGroupRoom(
+      dto.projectName,
+      userCreateId,
+      [userCreateId],
+      project.id,
+    );
+  } catch (e) {
+    console.error('Failed to auto-create chat room:', e);
+  }
+
+  return project;
 }
 
   async findAll() {

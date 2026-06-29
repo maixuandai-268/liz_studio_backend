@@ -59,11 +59,16 @@ export class TaskController {
   @Patch('move/:id')
   moveTask(
     @Param('id') id: string, 
-    @Body() moveDto: { status: string; project_id?: number }
+    @Body() moveDto: { status: string; project_id?: number },
+    @Req() req: any,
   ) {
+    const userId = Number(req.user?.id || req.user?.sub || 0);
+    const role = req.user?.role || 'employee';
     return this.taskService.moveTask(
       id, 
       { status: moveDto.status },
+      userId,
+      role,
       String(moveDto.project_id || '')
     );
   }
@@ -108,9 +113,9 @@ export class TaskController {
   @Post(':id/request-phase')
   async requestPhase(
     @Param('id') id: string,
-    @Body() body: { userId: number },
+    @Body() body: { userId: number; targetPhase?: string },
   ) {
-    return this.taskService.requestPhase(id, body.userId);
+    return this.taskService.requestPhase(id, body.userId, body.targetPhase);
   }
 
   @Post(':id/approve-phase')
@@ -137,6 +142,23 @@ export class TaskController {
   @Post(':id/revision-completed')
   async revisionCompleted(@Param('id') id: string) {
     return this.taskService.revisionCompleted(id);
+  }
+
+  // ── Links / Attachments ──
+
+  @Post(':id/attachments')
+  async addAttachment(
+    @Param('id') id: string,
+    @Body() body: { url: string; name?: string },
+    @Req() req: any,
+  ) {
+    const userId = Number(req.user?.id || req.user?.sub);
+    return this.taskService.addAttachment(id, userId, body.url, body.name);
+  }
+
+  @Delete(':id/attachments/:attachId')
+  async removeAttachment(@Param('id') id: string, @Param('attachId') attachId: string) {
+    return this.taskService.removeAttachment(Number(attachId));
   }
 
   // ── KPI Allocation ──

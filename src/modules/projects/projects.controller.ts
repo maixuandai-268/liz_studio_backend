@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Controller, Get, Post, Param, Patch, Delete, Body, UsePipes, ValidationPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Patch, Delete, Body, UsePipes, ValidationPipe, UseGuards, Req } from '@nestjs/common';
 import { ProjectService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -23,8 +23,9 @@ export class ProjectController {
 
   @Post()
   @UsePipes(new ValidationPipe())
-  create(@Body() createProjectDto: CreateProjectDto) {
-    return this.projectService.createProject(createProjectDto);
+  create(@Body() createProjectDto: CreateProjectDto, @Req() req: any) {
+    const userId = Number(req.user?.id || req.user?.sub);
+    return this.projectService.createProject(createProjectDto, userId);
   }
 
   @Get()

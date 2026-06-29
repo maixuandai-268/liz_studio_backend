@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -34,6 +35,16 @@ export class ChatController {
     }
   }
 
+  // ── Get room by project ──
+  @Get('room/by-project/:projectId')
+  async getRoomByProject(@Param('projectId') projectId: string) {
+    try {
+      return await this.chatService.getRoomByProject(Number(projectId));
+    } catch (error) {
+      throw new HttpException('Room not found', HttpStatus.NOT_FOUND);
+    }
+  }
+
   @Post('dm')
   async createOrGetDM(@Body() body: { targetUserId: number }, @Req() req: any) {
     try {
@@ -48,13 +59,39 @@ export class ChatController {
 
   // ── Group: create ──
   @Post('group')
-  async createGroup(@Body() body: { name: string; participantIds: number[] }, @Req() req: any) {
+  async createGroup(@Body() body: { name: string; projectId?: number; participantIds: number[] }, @Req() req: any) {
     try {
       const userId = req.user?.id || req.user?.sub;
       if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.createGroupRoom(body.name, Number(userId), body.participantIds);
+      return await this.chatService.createGroupRoom(body.name, Number(userId), body.participantIds, body.projectId);
     } catch (error) {
       this.logger.error(`Failed to create group: ${error}`);
+      throw new HttpException(error, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // ── Add participant to room ──
+  @Post('room/:roomId/participants')
+  async addParticipant(@Param('roomId') roomId: string, @Body() body: { userId: number }, @Req() req: any) {
+    try {
+      const userId = req.user?.id || req.user?.sub;
+      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+      return await this.chatService.addParticipant(Number(roomId), body.userId);
+    } catch (error) {
+      this.logger.error(`Failed to add participant: ${error}`);
+      throw new HttpException(error, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // ── Remove participant from room ──
+  @Delete('room/:roomId/participants/:targetUserId')
+  async removeParticipant(@Param('roomId') roomId: string, @Param('targetUserId') targetUserId: string, @Req() req: any) {
+    try {
+      const userId = req.user?.id || req.user?.sub;
+      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+      return await this.chatService.removeParticipant(Number(roomId), Number(targetUserId));
+    } catch (error) {
+      this.logger.error(`Failed to remove participant: ${error}`);
       throw new HttpException(error, HttpStatus.BAD_REQUEST);
     }
   }

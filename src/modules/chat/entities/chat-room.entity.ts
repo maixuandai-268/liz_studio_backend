@@ -16,6 +16,9 @@ export class ChatRoom {
   @Column({ length: 255, nullable: true })
   name: string;
 
+  @Column({ nullable: true })
+  projectId : number;
+
   @Column({ name: 'is_group', default: false })
   isGroup: boolean;
 
