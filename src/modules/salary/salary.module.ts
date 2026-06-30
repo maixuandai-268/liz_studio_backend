@@ -7,10 +7,13 @@ import { SalaryController } from './salaryi.controller';
 import { Employee } from '@/modules/employee/entities/emplyee.entity';
 import { Level } from '@/modules/levels/entities/levels.entity';
 import { EmployeeKpi } from '@/modules/kpi/entities/employee-kpi.entity';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
+import { User } from '@/modules/users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SalaryPeriod, SalaryRecord, Employee, Level, EmployeeKpi]),
+    TypeOrmModule.forFeature([SalaryPeriod, SalaryRecord, Employee, Level, EmployeeKpi, User]),
+    NotificationsModule,
   ],
   controllers: [SalaryController],
   providers: [SalaryService],

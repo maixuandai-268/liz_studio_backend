@@ -10,6 +10,7 @@ import { AttendanceRecord } from './entities/attendance-records.entity';
 import { User } from '../users/entities/user.entity';
 import { Employee } from '../employee/entities/emplyee.entity';
 import { RealtimeService } from '../realtime/realtime.service';
+import { NotificationTriggersService } from '../notifications/notification-triggers.service';
 import { CreateCheckInDto } from './dto/create-check-in.dto';
 import { CreateCheckOutDto } from './dto/create-check-out.dto';
 import { ApproveAttendanceDto } from './dto/approve-attendance.dto';
@@ -34,24 +35,31 @@ export class AttendanceService {
     @InjectRepository(Employee)
     private employeeRepo: Repository<Employee>,
     private realtimeService: RealtimeService,
+    private notificationTriggers: NotificationTriggersService,
   ) {}
 
-  // ── Helpers ──
+  private async fireLateCheckInNotif(userId: number, notes: string) {
+    try {
+      const emp = await this.employeeRepo.findOne({ where: { userId } } as any);
+      const name = (emp as any)?.full_name || `User #${userId}`;
+      await this.notificationTriggers.lateCheckIn(name, notes || '');
+    } catch (err) {
+      this.logger.error(`[NOTIF] lateCheckIn error: ${(err as any).message}`);
+    }
+  }
+
 
   private todayString(): string {
     const d = this.localNow();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  /** Returns current time in GMT+7 */
   private localNow(): Date {
     const now = new Date();
-    // Convert to GMT+7 local time for comparisons
     const local = new Date(now.getTime() + 7 * 60 * 60 * 1000);
     return local;
   }
 
-  /** Convert a timestamp to GMT+7 local date components */
   private toLocalTime(iso: Date): { h: number; m: number } {
     const d = new Date(iso.getTime() + 7 * 60 * 60 * 1000);
     return { h: d.getUTCHours(), m: d.getUTCMinutes() }; // UTC methods after offset shift
@@ -71,13 +79,11 @@ export class AttendanceService {
     return count;
   }
 
-  /** Calculate late minutes compared to 10:00 AM local time, with 15 min grace */
   private calculateLateMinutes(checkIn: Date): number {
     const { h, m } = this.toLocalTime(checkIn);
-    const startTotal = START_HOUR * 60 + START_MINUTE; // 10:00 = 600
+    const startTotal = START_HOUR * 60 + START_MINUTE;
     const checkInTotal = h * 60 + m;
     const rawLate = Math.max(0, checkInTotal - startTotal);
-    // Grace period: only count if > LATE_GRACE_MINUTES
     if (rawLate <= LATE_GRACE_MINUTES) return 0;
     return rawLate;
   }
@@ -89,18 +95,15 @@ export class AttendanceService {
     return 'x';
   }
 
-  // ── Check-in ──
 
   async checkIn(userId: number, projectId: string, dto: CreateCheckInDto) {
     const today = this.todayString();
 
-    // Check work day (Mon-Sat)
     const now = this.localNow();
     if (!this.isWorkDay(now)) {
       throw new BadRequestException('Hôm nay là Chủ nhật, không phải ngày làm việc');
     }
 
-    // Geo validation
     if (!dto.latitude || !dto.longitude) {
       throw new BadRequestException('Cần có tọa độ GPS để chấm công');
     }
@@ -110,7 +113,6 @@ export class AttendanceService {
       );
     }
 
-    // Check duplicate
     const existing = await this.attendanceRepo.findOne({
       where: { userId, attendanceDate: today } as any,
     });
@@ -147,10 +149,14 @@ export class AttendanceService {
     this.logger.log(
       `[CHECKIN] User ${userId} at ${checkInTime.toISOString()} — ${status} (late: ${lateMinutes}min) — geo: ${dto.latitude},${dto.longitude}`,
     );
+
+    if (lateMinutes > 0) {
+      this.fireLateCheckInNotif(userId, dto.notes).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
+    }
+
     return saved;
   }
 
-  // ── Check-out ──
 
   async checkOut(userId: number, projectId: string, dto: CreateCheckOutDto) {
     const today = this.todayString();

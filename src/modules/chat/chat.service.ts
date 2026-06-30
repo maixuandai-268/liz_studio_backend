@@ -5,6 +5,8 @@ import { Message } from './entities/message.entity';
 import { ChatRoom } from './entities/chat-room.entity';
 import { ChatParticipant } from './entities/chat-participant.entity';
 import { RealtimeService } from '@/modules/realtime/realtime.service';
+import { NotificationTriggersService } from '@/modules/notifications/notification-triggers.service';
+import { User } from '@/modules/users/entities/user.entity';
 
 @Injectable()
 export class ChatService {
@@ -18,7 +20,33 @@ export class ChatService {
     @InjectRepository(ChatParticipant)
     private participantRepository: Repository<ChatParticipant>,
     private realtimeService: RealtimeService,
+    private notificationTriggers: NotificationTriggersService,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
+
+  private async fireChatNotif(roomId: number, senderId: number, content: string) {
+    try {
+      const participants = await this.participantRepository.find({ where: { roomId } });
+      const sender = await this.userRepo.findOne({ where: { id: senderId }, relations: { employee: true } });
+      const senderName = sender?.employee?.full_name || 'Unknown';
+
+      for (const p of participants) {
+        if (p.userId === senderId) continue;
+        const targetUser = await this.userRepo.findOne({ where: { id: p.userId } });
+        if (targetUser) {
+          this.notificationTriggers.chatMessage(
+            senderName,
+            content,
+            p.userId,
+            targetUser.email,
+          ).catch(e => this.logger.error(`[NOTIF-CHAT] ${e.message}`));
+        }
+      }
+    } catch (err) {
+      this.logger.error(`[NOTIF-CHAT-ERR] ${(err as any).message}`);
+    }
+  }
 
   // ─── Channel-based (cũ) ───
 
@@ -205,6 +233,8 @@ export class ChatService {
       content: saved.content,
       createdAt: saved.createdAt,
     });
+
+    this.fireChatNotif(roomId, userId, content).catch(() => undefined);
 
     this.logger.log(`[CHAT] Room message sent: ${userName} → room ${roomId}`);
     return saved;

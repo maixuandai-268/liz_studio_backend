@@ -11,12 +11,14 @@ import { TaskChecklist } from './entities/task-checklist.entity';
 import { TasksService } from './tasks.service';
 import { RealtimeModule } from '@/modules/realtime/realtime.module';
 import { TaskLogsModule } from '@/modules/task-logs/task-logs.module';
+import { KpiModule } from '@/modules/kpi/kpi.module';
 import { Task_Categories } from './entities/categories.entity';
 import { Projects } from '../projects/entities/project.entity';
 import { Employee } from '../employee/entities/emplyee.entity';
 import { TaskController } from './tasks.controller';
 import { TaskCommentsController } from './sub-resources/task-comments.controller';
 import { TaskChecklistController } from './sub-resources/task-checklist.controller';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { TasksChecklistsService } from './sub-resources/tasks-checklists.service';
 
 @Module({
@@ -36,9 +38,11 @@ import { TasksChecklistsService } from './sub-resources/tasks-checklists.service
     ]),
     RealtimeModule,
     TaskLogsModule,
+    KpiModule,
+    NotificationsModule,
   ],
   controllers: [TaskController, TaskCommentsController, TaskChecklistController],
-  providers: [TasksService, TasksChecklistsService],
+  providers: [TasksService, TasksChecklistsService, TaskCommentsService],
   exports: [TasksService, TasksChecklistsService],
 })
 export class TasksModule {}

@@ -168,19 +168,11 @@ export class TaskController {
     return this.taskService.getTaskKpi(id);
   }
 
-  @Get(':id/kpi/phase/:phase')
-  async getPhaseKpiInfo(
-    @Param('id') id: string,
-    @Param('phase') phase: string,
-  ) {
-    return this.taskService.getPhaseKpiInfo(id, phase);
-  }
-
   @Post(':id/kpi/allocate')
-  async allocatePhaseKpi(
+  async allocateKpi(
     @Param('id') id: string,
-    @Body() body: { phase: string; allocations: { userId: number; points: number }[] },
+    @Body() body: { allocations: { userId: number; points: number; is_main?: boolean }[] },
   ) {
-    return this.taskService.allocatePhaseKpi(id, body.phase, body.allocations);
+    return this.taskService.allocateKpi(id, body.allocations);
   }
 }

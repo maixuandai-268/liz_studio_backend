@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+﻿import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KpiProductType } from './entities/kpi-product-type.entity';
@@ -51,32 +52,138 @@ export class KpiService {
     this.logger.log(`[DELETE] Product type ${id}`);
   }
 
-  // ── Monthly rankings ──
 
-  async getMonthlyRanking(year: number, month: number) {
-    // Aggregate KPI points per user for the month from employee_kpis
+  async updateMonthlySummary(userId: number, year: number, month: number) {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-    const userId = 'user_id';
+    const rows = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT COALESCE(SUM(points), 0) as total_points
+       FROM employee_kpis
+       WHERE user_id = $1 AND achieved_date >= $2 AND achieved_date <= $3`,
+      [userId, startDate, endDate],
+    );
+    const totalPoints = Number(rows[0]?.total_points) || 0;
+
+    const levelRows = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT l.kpi_target
+       FROM levels l
+       JOIN employee e ON e.level_id = l.id
+       WHERE e.user_id = $1`,
+      [userId],
+    );
+    const targetPoints = Number(levelRows[0]?.kpi_target) || 100;
+    const productivityPercent = targetPoints > 0
+      ? Math.min(Math.round((totalPoints / targetPoints) * 10000) / 100, 200)
+      : 0;
+
+    // Upsert
+    const existing = await this.monthlySummaryRepo.findOne({
+      where: { userId, year, month } as any,
+    });
+
+    if (existing) {
+      existing.totalPoints = totalPoints;
+      existing.targetPoints = targetPoints;
+      existing.productivityPercent = productivityPercent;
+      await this.monthlySummaryRepo.save(existing);
+    } else {
+      const summary = this.monthlySummaryRepo.create({
+        userId,
+        year,
+        month,
+        totalPoints,
+        targetPoints,
+        productivityPercent,
+      } as any);
+      await this.monthlySummaryRepo.save(summary);
+    }
+
+    this.logger.log(`[SUMMARY] Updated user ${userId} for ${year}-${month}: ${totalPoints}/${targetPoints}`);
+  }
+
+
+  async summarizeAll(year: number, month: number) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+    const userIds = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT DISTINCT user_id FROM employee_kpis
+       WHERE achieved_date >= $1 AND achieved_date <= $2`,
+      [startDate, endDate],
+    );
+
+    const allUsers = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT DISTINCT e.user_id FROM employee e
+       JOIN level l ON l.id = e.level_id`,
+    );
+    const seen = new Set(userIds.map((r: any) => Number(r.user_id)));
+    for (const u of allUsers) {
+      const uid = Number(u.user_id);
+      if (!seen.has(uid)) {
+        userIds.push({ user_id: uid });
+        seen.add(uid);
+      }
+    }
+
+    for (const row of userIds) {
+      await this.updateMonthlySummary(Number(row.user_id), year, month);
+    }
+
+    this.logger.log(`[SUMMARY] Summarized ${userIds.length} users for ${year}-${month}`);
+    return { users: userIds.length, year, month };
+  }
+
+
+  async getMonthlyRanking(year: number, month: number) {
+    const summaries = await this.monthlySummaryRepo.find({
+      where: { year, month } as any,
+      order: { totalPoints: 'DESC' } as any,
+    });
+
+    if (summaries.length === 0) {
+      return this.getMonthlyRankingFallback(year, month);
+    }
+
+    const employees = await this.kpiRecordRepo.manager.connection.query(
+      `SELECT u.id as user_id, COALESCE(e.full_name, 'Unknown') as full_name
+       FROM users u
+       LEFT JOIN employee e ON e.user_id = u.id`,
+    );
+    const empMap = new Map(employees.map((e: any) => [Number(e.user_id), e.full_name]));
+
+    return summaries.map((s, i) => ({
+      rank: i + 1,
+      userId: s.userId,
+      fullName: empMap.get(s.userId) || `User #${s.userId}`,
+      totalPoints: Number(s.totalPoints) || 0,
+      targetPoints: Number(s.targetPoints) || 100,
+      productivityPercent: Number(s.productivityPercent) || 0,
+    }));
+  }
+
+  private async getMonthlyRankingFallback(year: number, month: number) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
     const raw = await this.kpiRecordRepo.manager.connection.query(
-      `SELECT ${userId}, SUM(points) as total_points
+      `SELECT user_id, SUM(points) as total_points
        FROM employee_kpis
        WHERE achieved_date >= $1 AND achieved_date <= $2
-       GROUP BY ${userId}
+       GROUP BY user_id
        ORDER BY total_points DESC`,
       [startDate, endDate],
     );
 
     const employees = await this.kpiRecordRepo.manager.connection.query(
-      `SELECT u.id as user_id, COALESCE(e.full_name, u.full_name) as full_name
+      `SELECT u.id as user_id, COALESCE(e.full_name, 'Unknown') as full_name
        FROM users u
        LEFT JOIN employee e ON e.user_id = u.id`,
     );
     const empMap = new Map(employees.map((e: any) => [Number(e.user_id), e.full_name]));
 
     const levels = await this.kpiRecordRepo.manager.connection.query(
-      `SELECT l.user_id, l.kpi_target FROM level l`,
+      `SELECT e.user_id, l.kpi_target FROM levels l JOIN employee e ON e.level_id = l.id`,
     );
     const levelMap = new Map(levels.map((l: any) => [l.user_id, Number(l.kpi_target) || 100]));
 
@@ -91,4 +198,45 @@ export class KpiService {
         : 0,
     }));
   }
+
+  async getEmployeeMonthlyPoints(userId: number, year: number, month: number) {
+    const summary = await this.monthlySummaryRepo.findOne({
+      where: { userId, year, month } as any,
+    });
+
+    if (summary) {
+      return {
+        totalPoints: Number(summary.totalPoints) || 0,
+        targetPoints: Number(summary.targetPoints) || 100,
+      };
+    }
+
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const rows = await this.kpiRecordRepo.manager.connection.query(
+      'SELECT COALESCE(SUM(points), 0) as total_points FROM employee_kpis WHERE user_id = $1 AND achieved_date >= $2 AND achieved_date <= $3',
+      [userId, startDate, endDate],
+    );
+    const totalPoints = Number(rows[0]?.total_points) || 0;
+    const levelRows = await this.kpiRecordRepo.manager.connection.query(
+      'SELECT l.kpi_target FROM levels l JOIN employee e ON e.level_id = l.id WHERE e.user_id = $1',
+      [userId],
+    );
+    const targetPoints = Number(levelRows[0]?.kpi_target) || 100;
+    return { totalPoints, targetPoints };
+  }
+
+
+  @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_MIDNIGHT)
+  async cronSummarizeLastMonth() {
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const year = prevMonth.getFullYear();
+    const month = prevMonth.getMonth() + 1;
+    this.logger.log(`[CRON] Auto-summarizing KPI for ${year}-${month}`);
+    await this.summarizeAll(year, month);
+  }
 }
+
+
+

@@ -2,6 +2,7 @@ require('dotenv').config();
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Modules
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
@@ -25,6 +26,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,

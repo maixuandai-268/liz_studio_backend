@@ -1,42 +1,24 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { TaskComment } from '../entities/task-comment.entity';
+import { Controller, Get, Post, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { TaskCommentsService } from './task-comments.service';
 
 @Controller('tasks/:taskId/comments')
 @UseGuards(JwtAuthGuard)
 export class TaskCommentsController {
-  constructor(
-    @InjectRepository(TaskComment)
-    private commentRepo: Repository<TaskComment>,
-  ) {}
+  constructor(private readonly taskCommentsService: TaskCommentsService) {}
 
   @Get()
   async findAll(@Param('taskId') taskId: string) {
-    return this.commentRepo.find({
-      where: { taskId: Number(taskId) } as any,
-      order: { createdAt: 'ASC' },
-    });
+    return this.taskCommentsService.findAll(Number(taskId));
   }
 
   @Post()
   async create(
     @Param('taskId') taskId: string,
-    @Body() body: { content: string; userId?: number },
+    @Body() body: { content: string },
+    @Request() req: any
   ) {
-    const comment = this.commentRepo.create({
-      taskId: Number(taskId),
-      content: body.content,
-      userId: body.userId ?? 0,
-    } as any);
-    return this.commentRepo.save(comment);
+    const userId = req.user.id;
+    return this.taskCommentsService.create(Number(taskId), userId, body.content);
   }
 }

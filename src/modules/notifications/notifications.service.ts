@@ -3,7 +3,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
-import { CreateNotificationDto } from './dto/create-notification.dto';
 
 @Injectable()
 export class NotificationsService {
@@ -12,8 +11,8 @@ export class NotificationsService {
     private readonly notificationRepository: Repository<Notification>,
   ) {}
 
-  async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {
-    const notification = this.notificationRepository.create(createNotificationDto);
+  async create(data: Partial<Notification>): Promise<Notification> {
+    const notification = this.notificationRepository.create(data);
     return await this.notificationRepository.save(notification);
   }
 
@@ -21,6 +20,37 @@ export class NotificationsService {
     return await this.notificationRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findAllByUserPaginated(
+    userId: number,
+    page: number = 1,
+    limit: number = 6,
+  ): Promise<{ data: Notification[]; total: number; unreadCount: number; page: number; totalPages: number }> {
+    const [data, total] = await this.notificationRepository.findAndCount({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const unreadCount = await this.notificationRepository.count({
+      where: { userId, isRead: false },
+    });
+
+    return {
+      data,
+      total,
+      unreadCount,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getUnreadCount(userId: number): Promise<number> {
+    return this.notificationRepository.count({
+      where: { userId, isRead: false },
     });
   }
 

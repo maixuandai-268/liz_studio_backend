@@ -6,6 +6,8 @@ import { SalaryRecord } from './entities/salary-record.entity';
 import { Employee } from '@/modules/employee/entities/emplyee.entity';
 import { Level } from '@/modules/levels/entities/levels.entity';
 import { EmployeeKpi } from '@/modules/kpi/entities/employee-kpi.entity';
+import { NotificationTriggersService } from '@/modules/notifications/notification-triggers.service';
+import { User } from '@/modules/users/entities/user.entity';
 
 @Injectable()
 export class SalaryService {
@@ -22,7 +24,21 @@ export class SalaryService {
     private levelRepo: Repository<Level>,
     @InjectRepository(EmployeeKpi)
     private kpiRepo: Repository<EmployeeKpi>,
+    private notificationTriggers: NotificationTriggersService,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
+
+  private async fireSalaryApprovedNotif(userId: number) {
+    try {
+      const emp = await this.employeeRepo.findOne({ where: { userId } as any });
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      const name = (emp as any)?.full_name || `User #${userId}`;
+      await this.notificationTriggers.salaryApproved(userId, name, user?.email).catch(e => this.logger.error(`[NOTIF-SALARY] ${e.message}`));
+    } catch (err) {
+      this.logger.error(`[NOTIF-SALARY-ERR] ${(err as any).message}`);
+    }
+  }
 
   // ── Quarters ──
 
@@ -350,14 +366,21 @@ export class SalaryService {
     record.status = 'approved';
     record.approved_by = approvedBy;
     record.approved_at = new Date();
-    return this.recordRepo.save(record as any);
+    return this.recordRepo.save(record as any).then(saved => {
+      this.fireSalaryApprovedNotif((record as any).userId || (record as any).user_id).catch(() => undefined);
+      return saved;
+    });
   }
 
   async bulkApprove(periodId: number, approvedBy: number) {
+    const records = await this.recordRepo.find({ where: { period_id: periodId, status: 'pending' } as any });
     await this.recordRepo.update(
       { period_id: periodId, status: 'pending' } as any,
       { status: 'approved', approved_by: approvedBy, approved_at: new Date() } as any,
     );
+    for (const r of records) {
+      this.fireSalaryApprovedNotif((r as any).userId || (r as any).user_id).catch(() => undefined);
+    }
     return { success: true };
   }
 

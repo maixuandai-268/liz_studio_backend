@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, UsePipes, ValidationPipe } from '@nestjs/common';
 import { KpiService } from './kpi.service';
 import { CreateProductTypeDto } from './dto/create-product-type.dto';
 import { UpdateProductTypeDto } from './dto/update-product-type.dto';
@@ -38,5 +38,23 @@ export class KpiController {
     const y = year ? parseInt(year, 10) : new Date().getFullYear();
     const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
     return this.kpiService.getMonthlyRanking(y, m);
+  }
+
+  @Post('summarize')
+  async triggerSummarize(
+    @Query('year') year: string,
+    @Query('month') month: string,
+  ) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    const m = month ? parseInt(month, 10) : new Date().getMonth() + 1;
+    return this.kpiService.summarizeAll(y, m);
+  }
+
+  @Get('my-points')
+  getMyPoints(@Req() req: any) {
+    const userId = Number(req.user?.id || req.user?.sub || 0);
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    return this.kpiService.getEmployeeMonthlyPoints(userId, year, month);
   }
 }

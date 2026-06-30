@@ -6,12 +6,14 @@ import { UsersModule } from '../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { NotificationsModule } from '@/modules/notifications/notifications.module';
 require('dotenv').config();
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
+    NotificationsModule,
     JwtModule.register(
         {
             secret : process.env.JWT_SECRET,

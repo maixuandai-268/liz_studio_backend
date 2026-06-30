@@ -12,6 +12,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { Task_Categories } from '../tasks/entities/categories.entity';
 import { Task } from '../tasks/entities/task.entity';
 import { ChatService } from '@/modules/chat/chat.service';
+import { NotificationTriggersService } from '@/modules/notifications/notification-triggers.service';
 
 @Injectable()
 export class ProjectService {
@@ -23,6 +24,7 @@ export class ProjectService {
     @InjectRepository(Task)
     private readonly taskRepo: Repository<Task>,
     private chatService: ChatService,
+    private notificationTriggers: NotificationTriggersService,
   ) { }
 
   async findOne(id: number) {
@@ -94,8 +96,15 @@ for (const view of dto.views) {
       throw new BadRequestException(`Không tìm thấy Project với id ${id}`);
     }
 
+    const oldStatus = project.status;
     Object.assign(project, updateProjectDto);
-    return await this.projectRepo.save(project);
+    const saved = await this.projectRepo.save(project);
+
+    if (oldStatus !== 'completed' && updateProjectDto.status === 'completed') {
+      this.notificationTriggers.projectCompleted((project as any).projectName || `Project #${project.id}`).catch(() => undefined);
+    }
+
+    return saved;
   }
 
   async remove(id: number) {

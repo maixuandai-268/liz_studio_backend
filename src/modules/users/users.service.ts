@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+﻿/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable prettier/prettier */
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -95,8 +95,11 @@ export class UsersService {
     return await this.userRepo.findOneBy({employee_code : employee_code })
   }
 
-  async findById(id : number){
-    return await this.userRepo.findOne({where: { id }});
+  async findById(id: number) {
+    return await this.userRepo.findOne({
+      where: { id },
+      relations: { employee: true },
+    });
   }
 
   async updateRefreshToken(
