@@ -18,3 +18,4 @@ import { RealtimeModule } from '@/modules/realtime/realtime.module';
   exports: [NotificationsService, NotificationTriggersService, MailService],
 })
 export class NotificationsModule {}
+

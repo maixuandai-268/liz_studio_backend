@@ -7,7 +7,6 @@ import { UpdateProductTypeDto } from './dto/update-product-type.dto';
 export class KpiController {
   constructor(private readonly kpiService: KpiService) {}
 
-  // Product types
   @Get('product-types')
   getProductTypes() {
     return this.kpiService.findAllProductTypes();
@@ -29,7 +28,6 @@ export class KpiController {
     return this.kpiService.deleteProductType(+id);
   }
 
-  // Monthly ranking
   @Get('ranking')
   getMonthlyRanking(
     @Query('year') year: string,
@@ -58,3 +56,4 @@ export class KpiController {
     return this.kpiService.getEmployeeMonthlyPoints(userId, year, month);
   }
 }
+

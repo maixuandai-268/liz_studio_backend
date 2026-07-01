@@ -32,3 +32,4 @@ export class CreateMessageDto {
   @IsOptional()
   metadata?: string;
 }
+

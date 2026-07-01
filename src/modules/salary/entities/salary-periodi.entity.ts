@@ -36,3 +36,4 @@ export class SalaryPeriod {
   @CreateDateColumn()
   created_at: Date;
 }
+

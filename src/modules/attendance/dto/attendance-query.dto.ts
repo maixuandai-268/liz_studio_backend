@@ -25,3 +25,4 @@ export class AttendanceQueryDto {
   @IsInt()
   userId?: number;
 }
+

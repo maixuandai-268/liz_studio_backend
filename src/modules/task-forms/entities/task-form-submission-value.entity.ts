@@ -30,3 +30,4 @@ export class TaskFormSubmissionValue {
   @JoinColumn({ name: 'field_id' })
   field: TaskFormField;
 }
+

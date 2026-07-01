@@ -10,7 +10,6 @@ export class RealtimeService {
     this.server = server;
   }
 
-  // ── Task events ──
 
   emitTaskEvent(
     projectId: string,
@@ -23,7 +22,6 @@ export class RealtimeService {
     this.logger.log(`[TASK] ${eventType.toUpperCase()} emitted to room ${room}`);
   }
 
-  // ── Timeline ──
 
   emitTimelineEvent(projectId: string, payload: any) {
     if (!this.server) return;
@@ -32,7 +30,6 @@ export class RealtimeService {
     this.logger.log(`[TIMELINE] CREATED emitted to room ${room}`);
   }
 
-  // ── Channel chat (cũ) ──
 
   emitChatMessage(projectId: string, payload: any) {
     if (!this.server) return;
@@ -41,7 +38,6 @@ export class RealtimeService {
     this.logger.log(`[CHAT] MESSAGE emitted to room ${room}`);
   }
 
-  // ── Room chat (mới) ──
 
   emitRoomMessage(roomId: string, payload: any) {
     if (!this.server) return;
@@ -50,7 +46,6 @@ export class RealtimeService {
     this.logger.log(`[CHAT] ROOM_MESSAGE emitted to room ${room}`);
   }
 
-  // ── Notifications ──
 
   emitNotification(userId: string, payload: any) {
     if (!this.server) return;
@@ -59,7 +54,6 @@ export class RealtimeService {
     this.logger.log(`[NOTIFICATION] CREATED emitted to room ${room}`);
   }
 
-  // ── Online/offline ──
 
   broadcastUserOnline(projectId: string, userId: string, user: any) {
     if (!this.server) return;
@@ -75,7 +69,6 @@ export class RealtimeService {
     this.logger.log(`[USER] OFFLINE: ${userId} in room ${room}`);
   }
 
-  // ── Utils ──
 
   getRoomClients(room: string) {
     if (!this.server) return [];
@@ -87,3 +80,4 @@ export class RealtimeService {
     this.server.emit(event, payload);
   }
 }
+

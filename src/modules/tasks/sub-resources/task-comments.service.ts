@@ -32,22 +32,22 @@ export class TaskCommentsService {
     const comment = this.commentRepo.create({ taskId, userId, content } as any);
     const saved = await this.commentRepo.save(comment);
 
-    // Fire notification to admin
-    this.fireCommentNotif(taskId, userId).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
+    this.fireCommentNotif(taskId, userId, content).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
 
     return saved;
   }
 
-  private async fireCommentNotif(taskId: number, userId: number) {
+  private async fireCommentNotif(taskId: number, userId: number, content: string) {
     try {
       const task = await this.taskRepo.findOne({ where: { id: taskId } as any });
       const user = await this.userRepo.findOne({ where: { id: userId }, relations: { employee: true } as any });
       if (!task || !user) return;
       
       const userName = user.employee?.full_name || 'Unknown';
-      await this.notificationTriggers.taskComment(task.title || `Task #${taskId}`, userName);
+      await this.notificationTriggers.taskComment(task.title || `Task #${taskId}`, userName, content);
     } catch(e) {
       this.logger.error(`[NOTIF-COMMENT] ${(e as any).message}`);
     }
   }
 }
+

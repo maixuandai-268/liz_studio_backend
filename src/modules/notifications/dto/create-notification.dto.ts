@@ -15,3 +15,4 @@ export class CreateNotificationDto {
   @IsOptional()
   type?: NotificationType;
 }
+

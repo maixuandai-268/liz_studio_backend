@@ -27,20 +27,33 @@ export class ChatService {
 
   private async fireChatNotif(roomId: number, senderId: number, content: string) {
     try {
+      const room = await this.chatRoomRepository.findOne({ where: { id: roomId } });
       const participants = await this.participantRepository.find({ where: { roomId } });
       const sender = await this.userRepo.findOne({ where: { id: senderId }, relations: { employee: true } });
       const senderName = sender?.employee?.full_name || 'Unknown';
+      const groupName = room?.name || `Room #${roomId}`;
 
       for (const p of participants) {
         if (p.userId === senderId) continue;
         const targetUser = await this.userRepo.findOne({ where: { id: p.userId } });
         if (targetUser) {
-          this.notificationTriggers.chatMessage(
-            senderName,
-            content,
-            p.userId,
-            targetUser.email,
-          ).catch(e => this.logger.error(`[NOTIF-CHAT] ${e.message}`));
+          if (room?.isGroup && targetUser.email) {
+            await this.notificationTriggers.chatMessageGroup(
+              senderName,
+              groupName,
+              content,
+              p.userId,
+              targetUser.email,
+            );
+          } else if (!room?.isGroup) {
+            await this.notificationTriggers.chatMessage(
+              senderName,
+              content,
+              p.userId,
+            );
+          } else {
+            this.logger.warn(`[NOTIF-CHAT-WARN] User ${p.userId} has no email, skipping group notification`);
+          }
         }
       }
     } catch (err) {
@@ -48,7 +61,6 @@ export class ChatService {
     }
   }
 
-  // ─── Channel-based (cũ) ───
 
   async sendMessage(
     projectId: string,
@@ -109,10 +121,8 @@ export class ChatService {
     });
   }
 
-  // ─── DM: find or create 1:1 room ───
 
   async findOrCreateDM(userId1: number, userId2: number) {
-    // Tìm tất cả DM rooms
     const rooms = await this.chatRoomRepository
       .createQueryBuilder('room')
       .innerJoin('room.participants', 'p')
@@ -132,7 +142,6 @@ export class ChatService {
       }
     }
 
-    // Chưa có → tạo mới
     const room = this.chatRoomRepository.create({
       isGroup: false,
       createdBy: userId1,
@@ -148,7 +157,6 @@ export class ChatService {
     return saved;
   }
 
-  // ─── Group: create room ───
 
   async createGroupRoom(name: string, createdBy: number, participantIds: number[], projectId?: number) {
     const room = this.chatRoomRepository.create({
@@ -172,7 +180,6 @@ export class ChatService {
     return saved;
   }
 
-  // ─── List rooms của user ───
 
   async getUserRooms(userId: number) {
     const participations = await this.participantRepository.find({
@@ -213,7 +220,6 @@ export class ChatService {
     return enriched;
   }
 
-  // ─── Gửi tin vào room theo roomId ───
 
   async sendRoomMessage(roomId: number, userId: number, userName: string, content: string) {
     const messageCreate = this.messageRepository.create({
@@ -240,7 +246,6 @@ export class ChatService {
     return saved;
   }
 
-  // ─── Lấy history của room ───
 
   async getRoomMessagesById(roomId: number) {
     const messages = await this.messageRepository.find({
@@ -267,7 +272,6 @@ export class ChatService {
     }));
   }
 
-  // ─── Get room by project ───
 
   async getRoomByProject(projectId: number) {
     const room = await this.chatRoomRepository.findOne({
@@ -277,7 +281,6 @@ export class ChatService {
     return room;
   }
 
-  // ─── Kiểm tra user có trong room ───
 
   async isUserInRoom(roomId: number, userId: number): Promise<boolean> {
     const count = await this.participantRepository.count({
@@ -286,7 +289,26 @@ export class ChatService {
     return count > 0;
   }
 
-  // ─── Add participant ───
+  async markMessageAsRead(messageId: number, userId: number) {
+    const message = await this.messageRepository.findOne({ where: { id: messageId } });
+    if (!message) throw new Error('Message not found');
+
+    const readBy = message.readBy || [];
+    if (!readBy.includes(userId)) {
+      readBy.push(userId);
+    }
+
+    message.readBy = readBy;
+    if (!message.readAt) {
+      message.readAt = new Date();
+    }
+
+    const updated = await this.messageRepository.save(message);
+
+    this.logger.log(`[CHAT] Message #${messageId} read by user #${userId}`);
+    return { success: true, readBy: updated.readBy };
+  }
+
 
   async addParticipant(roomId: number, userId: number) {
     const exists = await this.participantRepository.count({ where: { roomId, userId } });
@@ -297,7 +319,6 @@ export class ChatService {
     );
     this.logger.log(`[CHAT] User ${userId} added to room ${roomId}`);
 
-    // Notify room
     this.realtimeService.emitRoomMessage(String(roomId), {
       id: `sys-${Date.now()}`,
       roomId,
@@ -310,7 +331,6 @@ export class ChatService {
     return { success: true };
   }
 
-  // ─── Remove participant ───
 
   async removeParticipant(roomId: number, userId: number) {
     const result = await this.participantRepository.delete({ roomId, userId });
@@ -328,3 +348,4 @@ export class ChatService {
     return { affected: result.affected };
   }
 }
+

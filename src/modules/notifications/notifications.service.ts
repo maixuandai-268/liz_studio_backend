@@ -71,3 +71,4 @@ export class NotificationsService {
     await this.notificationRepository.delete(id);
   }
 }
+

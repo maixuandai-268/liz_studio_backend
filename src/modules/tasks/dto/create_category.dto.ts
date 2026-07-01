@@ -8,3 +8,4 @@ export class CreateCategoryDto {
   @MinLength(5)
   tittle: string;
 }
+

@@ -25,3 +25,4 @@ export class UpdateUserStatusDto {
   @IsBoolean()
   is_active: boolean;
 }
+

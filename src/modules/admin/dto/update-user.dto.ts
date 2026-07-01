@@ -45,3 +45,4 @@ export class UpdateUserDto {
   @IsEnum(['user', 'admin', 'shop'])
   role?: 'user' | 'admin' | 'shop';
 }
+

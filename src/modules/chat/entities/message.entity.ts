@@ -44,4 +44,11 @@ export class Message {
   @ManyToOne(() => User)
   @JoinColumn({ name: "user_id" })
   user: User;
+
+  @Column({ name: 'read_by', type: 'simple-json', nullable: true })
+  readBy: number[];
+
+  @Column({ name: 'read_at', type: 'timestamp', nullable: true })
+  readAt: Date;
 }
+

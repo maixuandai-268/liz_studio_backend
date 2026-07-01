@@ -17,7 +17,7 @@ export class TaskKpiAllocation {
   userId: number;
 
   @Column()
-  phase: string; // 'v1' | 'v2' | 'v3'
+  phase: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   points: number;
@@ -28,3 +28,4 @@ export class TaskKpiAllocation {
   @CreateDateColumn()
   createdAt: Date;
 }
+

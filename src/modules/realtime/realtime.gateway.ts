@@ -110,7 +110,6 @@ export class RealtimeGateway
     this.server.emit('users_online', users);
   }
 
-  // ─── Channel chat (cũ) ───
 
   @SubscribeMessage('room:join')
   async handleRoomJoin(
@@ -186,7 +185,6 @@ export class RealtimeGateway
     return { success: true };
   }
 
-  // ─── Room chat (mới) ───
 
   @SubscribeMessage('room:join_chat')
   async handleRoomJoinChat(
@@ -249,7 +247,6 @@ export class RealtimeGateway
     }
   }
 
-  // ─── Typing ───
 
   @SubscribeMessage('typing:start')
   handleTypingStart(
@@ -280,4 +277,41 @@ export class RealtimeGateway
       typing: false,
     });
   }
+
+  @SubscribeMessage('message:read')
+  async handleMessageRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { messageId: number; roomId: number; channel: string },
+  ) {
+    const user = this.clientToUser.get(client.id);
+    if (!user) return { error: 'Unauthorized' };
+
+    try {
+      const result = await this.chatService.markMessageAsRead(
+        payload.messageId,
+        Number(user.userId),
+      );
+
+      if (payload.roomId) {
+        this.server.to(`chat-room-${payload.roomId}`).emit('message:read_status', {
+          messageId: payload.messageId,
+          userId: Number(user.userId),
+          readBy: result.readBy,
+        });
+      } else if (payload.channel) {
+        this.server.to(`project-${payload.channel}`).emit('message:read_status', {
+          messageId: payload.messageId,
+          userId: Number(user.userId),
+          channel: payload.channel,
+          readBy: result.readBy,
+        });
+      }
+
+      return { success: true, readBy: result.readBy };
+    } catch (error) {
+      this.logger.error(`[MESSAGE:READ] Failed: ${error}`);
+      return { error: 'Failed to mark as read' };
+    }
+  }
 }
+

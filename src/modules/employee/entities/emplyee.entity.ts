@@ -55,3 +55,4 @@ export class Employee {
   @OneToOne(() => Level, (level) => level.id)
   level: Level;
 }
+

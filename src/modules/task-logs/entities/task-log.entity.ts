@@ -42,3 +42,4 @@ export class TaskLog {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+

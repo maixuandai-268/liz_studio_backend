@@ -17,17 +17,17 @@ export class MailService {
     });
   }
 
-  async send(to: string, subject: string, html: string): Promise<void> {
+  async send(user: string, subject: string, html: string): Promise<void> {
     try {
       await this.transporter.sendMail({
         from: `"Liz Studio" <${process.env.EMAIL_USER}>`,
-        to,
+        to: user,
         subject,
         html,
       });
-      this.logger.log(`[MAIL] Sent "${subject}" to ${to}`);
+      this.logger.log(`[MAIL] Sent "${subject}" to ${user}`);
     } catch (err) {
-      this.logger.error(`[MAIL] Failed to send to ${to}: ${(err as any).message}`);
+      this.logger.error(`[MAIL] Failed to send to ${user}: ${(err as any).message}`);
     }
   }
 
@@ -35,7 +35,7 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#0d1b2a;color:#d4e4fa;border-radius:12px;">
         <div style="text-align:center;margin-bottom:20px;">
-          <img src="https://res.cloudinary.com/daq0rvezd/image/upload/v1748642930/logo_iiidvy.jpg" alt="Liz Studio" style="width:60px;height:60px;border-radius:12px;" />
+          <img src="https://res.cloudinary.com/daq0rvezd/image/upload/v1782897229/logo_hektqx.jpg" alt="Liz Studio" style="width:60px;height:60px;border-radius:12px;" />
           <h2 style="color:#ffb95f;margin:8px 0 0;">Liz Studio</h2>
         </div>
         <div style="background:#122131;padding:20px;border-radius:8px;border:1px solid #424754;">
@@ -50,3 +50,4 @@ export class MailService {
     await this.send(email, `[Liz Studio] ${title}`, html);
   }
 }
+

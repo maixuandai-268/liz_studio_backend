@@ -3,7 +3,10 @@ import {
   PrimaryGeneratedColumn, 
   Column, 
   CreateDateColumn, 
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Task } from './task.entity';
 
 @Entity('task_assignee')
 export class TaskAssignee {
@@ -12,6 +15,10 @@ export class TaskAssignee {
 
   @Column({nullable : true})   
   taskId : number;
+
+  @ManyToOne(() => Task, (task) => task.task_assignees)
+  @JoinColumn({ name: 'taskId' })
+  task: Task;
 
   @Column({nullable :true})   
   userId : number;
@@ -22,3 +29,4 @@ export class TaskAssignee {
   @CreateDateColumn()
   assignedAt: Date;
 }
+

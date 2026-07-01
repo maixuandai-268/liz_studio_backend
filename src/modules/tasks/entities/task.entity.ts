@@ -13,6 +13,7 @@ import {
   JoinColumn,
   ManyToOne,
 } from 'typeorm';
+import { TaskAssignee } from './task-assignee.entity';
 
 @Entity('tasks')
 export class Task {
@@ -91,6 +92,9 @@ export class Task {
   @JoinColumn({ name: 'project_id', })
   project: Projects;
 
+  @OneToMany(() => TaskAssignee, (assignee) => assignee.task)
+  task_assignees: TaskAssignee[];
+
   @Column()
   category_id: number;
   @ManyToOne(() => Task_Categories,(category) => category.task,
@@ -101,3 +105,4 @@ export class Task {
   category: Task_Categories;
 
 }
+

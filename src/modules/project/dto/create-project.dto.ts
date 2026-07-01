@@ -33,3 +33,4 @@ export class CreateProjectDto {
   @IsString({ each: true })
   images?: string[];
 }
+

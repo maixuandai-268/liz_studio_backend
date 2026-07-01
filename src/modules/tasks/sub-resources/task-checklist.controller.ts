@@ -35,3 +35,4 @@ export class TaskChecklistController {
     return this.service.toggle(Number(id));
   }
 }
+

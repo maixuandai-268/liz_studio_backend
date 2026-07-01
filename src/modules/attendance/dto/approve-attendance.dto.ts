@@ -11,3 +11,4 @@ export class ApproveAttendanceDto {
   @MaxLength(500)
   notes?: string;
 }
+

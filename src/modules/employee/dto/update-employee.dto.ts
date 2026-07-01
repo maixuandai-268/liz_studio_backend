@@ -38,3 +38,4 @@ export class UpdateEmployeeDto {
   @IsIn(['employee', 'admin'])
   role?: 'employee' | 'admin';
 }
+

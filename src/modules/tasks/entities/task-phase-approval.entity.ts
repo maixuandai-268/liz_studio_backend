@@ -12,7 +12,7 @@ export class TaskPhaseApproval {
   phase: string;
 
   @Column({ default: 'pending' })
-  status: string; // pending | approved | rejected
+  status: string;
 
   @Column()
   requested_by: number;
@@ -29,3 +29,4 @@ export class TaskPhaseApproval {
   @CreateDateColumn()
   createdAt: Date;
 }
+

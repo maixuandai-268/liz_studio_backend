@@ -44,3 +44,4 @@ export class Channel {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+

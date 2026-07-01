@@ -21,3 +21,4 @@ import { User } from '@/modules/users/entities/user.entity';
   exports: [ChatService],
 })
 export class ChatModule {}
+

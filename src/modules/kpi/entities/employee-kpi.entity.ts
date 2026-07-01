@@ -48,3 +48,4 @@ export class EmployeeKpi {
   @JoinColumn({ name: 'product_type_id' })
   productType: KpiProductType;
 }
+

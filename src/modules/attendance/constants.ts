@@ -1,23 +1,17 @@
-// ─── Geo Configuration ───
 export const COMPANY_LAT = parseFloat(process.env.COMPANY_LAT || '21.024418');
 export const COMPANY_LNG = parseFloat(process.env.COMPANY_LNG || '105.810977');
 export const COMPANY_RADIUS_METERS = 150;
 
-// ─── Work Hours (GMT+7, local time) ───
 export const START_HOUR = 10;
 export const START_MINUTE = 0;
 export const END_HOUR = 20;
 export const END_MINUTE = 0;
-export const WORKDAY_MINUTES = (END_HOUR - START_HOUR) * 60 - 120; // 600 min (10h)
+export const WORKDAY_MINUTES = (END_HOUR - START_HOUR) * 60 - 120;
 
-// ─── Late Policy ───
-export const LATE_GRACE_MINUTES = 15; // into work = 15 minutes
+export const LATE_GRACE_MINUTES = 15;
 
-// ─── Work Days (0=Sun, 1=Mon ... 6=Sat) ───
-// Monday through Saturday
 export const WORKDAYS = [1, 2, 3, 4, 5, 6];
 
-// ─── Geo Utils ───
 
 /**
  * Haversine distance between two lat/lng points in meters.
@@ -28,7 +22,7 @@ export function haversineDistance(
   lat2: number,
   lng2: number,
 ): number {
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
   const dLat = toRad(lat2 - lat1);
@@ -48,3 +42,4 @@ export function isWithinGeoRange(lat: number, lng: number): boolean {
   const distance = haversineDistance(lat, lng, COMPANY_LAT, COMPANY_LNG);
   return distance <= COMPANY_RADIUS_METERS;
 }
+

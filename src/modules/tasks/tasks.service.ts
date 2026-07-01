@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
@@ -10,6 +10,7 @@ import { TaskLogsService } from '@/modules/task-logs/task-logs.service';
 import { CreateCategoryDto } from './dto/create_category.dto';
 import { Task_Categories } from './entities/categories.entity';
 import { Employee } from '@/modules/employee/entities/emplyee.entity';
+import { User } from '@/modules/users/entities/user.entity';
 import { TaskPhaseApproval } from './entities/task-phase-approval.entity';
 import { KpiService } from '@/modules/kpi/kpi.service';
 import { NotificationTriggersService } from '@/modules/notifications/notification-triggers.service';
@@ -31,6 +32,8 @@ export class TasksService {
     private attachmentRepository: Repository<TaskAttachment>,
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
     @InjectRepository(TaskPhaseApproval)
     private phaseApprovalRepo: Repository<TaskPhaseApproval>,
     private realtimeService: RealtimeService,
@@ -47,7 +50,7 @@ export class TasksService {
     const nextPhase = targetPhase || (() => {
       const idx = this.PHASE_ORDER.indexOf(task.status);
       if (idx < 0 || idx >= this.PHASE_ORDER.length - 1) {
-        throw new BadRequestException('KhÃ´ng thá»ƒ chuyá»ƒn phase tá»« tráº¡ng thÃ¡i hiá»‡n táº¡i');
+        throw new BadRequestException('Không thể chuyển phase từ trạng thái hiện tại');
       }
       return this.PHASE_ORDER[idx + 1];
     })();
@@ -98,7 +101,6 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
     const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } } as any);
     const main = assignees.find((a: any) => a.is_main);
     if (!main) return;
-    // Neu co supporter -> skip auto, cho admin nhap tay
     const supporters = assignees.filter((a: any) => !a.is_main);
     if (supporters.length > 0) return;
     const ptRows = await this.taskRepository.manager.connection.query(
@@ -126,7 +128,7 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
 
   if (!task.pending_approval) {
     throw new BadRequestException(
-      'Task khÃ´ng cÃ³ yÃªu cáº§u duyá»‡t',
+      'Task không có yêu cầu duyệt',
     );
   }
 
@@ -142,7 +144,7 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
 
   if (!approval) {
     throw new NotFoundException(
-      'KhÃ´ng tÃ¬m tháº¥y yÃªu cáº§u duyá»‡t',
+      'Không tìm thấy yêu cầu duyệt',
     );
   }
 
@@ -221,7 +223,7 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
 
     const currentIdx = this.PHASE_ORDER.indexOf(task.status);
     if (currentIdx <= 0) {
-      throw new BadRequestException('KhÃ´ng thá»ƒ yÃªu cáº§u sá»­a á»Ÿ tráº¡ng thÃ¡i nÃ y');
+      throw new BadRequestException('Không thể yêu cầu sửa ở trạng thái này');
     }
     const revertPhase = task.previous_phase || this.PHASE_ORDER[currentIdx - 1];
 
@@ -256,7 +258,6 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
     const fullTask = await this.getTask(taskId);
     this.realtimeService.emitTaskEvent(String(task.project_id), 'updated', fullTask);
 
-    // Notify revision requested cho main assignee
     this.fireRevisionRequestedNotif(taskId, reason).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
 
     return { task: fullTask, reason };
@@ -266,7 +267,7 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
   async revisionCompleted(taskId: string) {
     const task = await this.getTask(taskId);
     if (!task.revision_requested) {
-      throw new BadRequestException('Task khÃ´ng cÃ³ yÃªu cáº§u sá»­a nÃ o');
+      throw new BadRequestException('Task không có yêu cầu sửa nào');
     }
 
     task.revision_requested = false;
@@ -279,14 +280,14 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
       taskId,
       'revision_completed',
       'employee',
-      'NhÃ¢n viÃªn',
+      'Nhân viên',
       [{ field: 'revision', oldValue: 'requested', newValue: 'completed' }],
     );
 
     const fullTask = await this.getTask(taskId);
     this.realtimeService.emitTaskEvent(String(task.project_id), 'updated', fullTask);
 
-    return { task: fullTask, message: 'ÄÃ£ hoÃ n thÃ nh sá»­a, chá» admin duyá»‡t' };
+    return { task: fullTask, message: 'Đã hoàn thành sửa, chờ admin duyệt' };
   }
 
   async getPhaseApprovals(taskId: string) {
@@ -398,27 +399,25 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
       const resolvedProjectId = projectId || String(task.project_id);
       const oldValues = { ...task };
 
-      // Strip undefined/null values to avoid FK violations
       const cleanDto = Object.fromEntries(
         Object.entries(updateTaskDto).filter(([_, v]) => v !== undefined && v !== null),
       );
-      Object.assign(task, cleanDto);
-      if ('category_id' in cleanDto) (task as any).category = null;
-      const updated = (await this.taskRepository.save(task)) as Task;
 
-      const changes = [];
-      for (const key of Object.keys(updateTaskDto)) {
-        if (oldValues[key] !== updateTaskDto[key]) {
-          changes.push({
-            field: key,
-            oldValue: oldValues[key],
-            newValue: updateTaskDto[key],
-          });
-        }
+      if (Object.keys(cleanDto).length > 0) {
+        await this.taskRepository.update(
+          { id: Number(taskId) },
+          cleanDto as any,
+        );
       }
 
-      if ('story_points' in updateTaskDto && oldValues['story_points'] !== updateTaskDto['story_points']) {
-        await this.recalculateAllKpi(task.id);
+      if ('story_points' in cleanDto && oldValues['story_points'] !== cleanDto['story_points']) {
+        this.logger.log(`[TASK] Recalculating KPI for task ${taskId} due to story point change.`);
+        await this.recalculateAllKpi(Number(taskId));
+      }
+
+      if (cleanDto['priority'] === 'urgent' && oldValues['priority'] !== 'urgent') {
+        this.logger.log(`[TASK] Priority for task ${taskId} changed to 'urgent'. Firing notification.`);
+        this.fireTaskBecameUrgentNotif(task).catch(e => this.logger.error(`[NOTIF] fireTaskBecameUrgentNotif failed: ${e.message}`));
       }
 
       await this.taskLogsService.createLog(
@@ -427,16 +426,20 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
         'updated',
         userId || 'system',
         userName || 'System',
-        changes,
+        Object.keys(cleanDto).map(key => ({
+          field: key,
+          oldValue: oldValues[key],
+          newValue: cleanDto[key],
+        })),
       );
 
       const fullTask = await this.getTask(taskId);
       this.realtimeService.emitTaskEvent(resolvedProjectId, 'updated', fullTask);
 
       this.logger.log(
-        `[TASK] Updated: ${updated.id} in project ${resolvedProjectId}`,
+        `[TASK] Updated: ${taskId} in project ${resolvedProjectId}`,
       );
-      return updated;
+      return fullTask;
     } catch (error) {
       this.logger.error(`[TASK] Update failed: ${error}`);
       throw error;
@@ -475,7 +478,6 @@ async moveTask(
 
       await this.autoAllocateKpiOnApproval(task, newStatus, oldStatus);
 
-      // Notify khi task hoàn thành
       if (newStatus === 'done') {
         this.fireTaskCompletedNotif(task).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
       }
@@ -585,7 +587,6 @@ async moveTask(
     const assignee = this.assigneeRepository.create({ taskId: taskIdNum, userId, is_main: isMain } as any);
     const saved = await this.assigneeRepository.save(assignee);
 
-    // Notify new task assigned
     this.fireNewTaskAssignedNotif(taskIdNum, userId).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
 
     return saved;
@@ -611,24 +612,20 @@ async moveTask(
       const task = await this.getTask(taskId);
       const totalPoints = Number(task.story_points) || 0;
 
-      // Find a valid product_type_id from employee_kpis or default
       const ptRows = await this.taskRepository.manager.connection.query(
         `SELECT id FROM kpi_product_types ORDER BY id LIMIT 1`,
       );
       const productTypeId = ptRows.length > 0 ? Number(ptRows[0].id) : 1;
 
-      // Validate: supporter points must not exceed total
       const supporterSum = supporterAllocations.reduce((s, a) => s + a.points, 0);
       if (supporterSum > totalPoints) {
-        throw new BadRequestException(`Äiá»ƒm há»— trá»£ (${supporterSum}) vÆ°á»£t quÃ¡ tá»•ng Ä‘iá»ƒm task (${totalPoints})`);
+        throw new BadRequestException(`Điểm hỗ trợ (${supporterSum}) vượt quá tổng điểm task (${totalPoints})`);
       }
 
-      // Find main assignee
       const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } } as any);
       const main = assignees.find((a: any) => a.is_main);
       const mainPoints = Math.round((totalPoints - supporterSum) * 100) / 100;
 
-      // Delete old allocations + records (use raw SQL for consistent column naming)
       await this.taskRepository.manager.connection.query(
         `DELETE FROM task_kpi_allocation WHERE "taskId" = $1 AND phase = $2`,
         [taskIdNum, phase],
@@ -640,7 +637,6 @@ async moveTask(
 
       const savedAllocs: TaskKpiAllocation[] = [];
 
-      // Save supporter allocations
       for (const alloc of supporterAllocations) {
         if (alloc.points <= 0) continue;
         const e = this.kpiAllocRepo.create({
@@ -653,7 +649,6 @@ async moveTask(
         savedAllocs.push(await this.kpiAllocRepo.save(e) as unknown as TaskKpiAllocation);
       }
 
-      // Main gets remaining points
       if (main && mainPoints > 0) {
         const e = this.kpiAllocRepo.create({
           taskId: taskIdNum,
@@ -684,9 +679,9 @@ async moveTask(
       const employeeName = (mainName as any)?.full_name || 'Unknown';
       const projectId = task.project_id;
       const project = await this.taskRepository.manager.connection.query(
-        'SELECT name FROM projects WHERE id = $1', [projectId],
+        'SELECT "projectName" FROM projects WHERE id = $1', [projectId],
       );
-      const projectName = project[0]?.name || `Project #${projectId}`;
+      const projectName = project[0]?.projectName || `Project #${projectId}`;
 
       await this.notificationTriggers.taskCompleted(
         task.title || `Task #${task.id}`,
@@ -703,9 +698,9 @@ async moveTask(
       const task = await this.taskRepository.findOne({ where: { id: taskId } } as any);
       if (!task) return;
       const project = await this.taskRepository.manager.connection.query(
-        'SELECT name FROM projects WHERE id = $1', [task.project_id],
+        'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
       );
-      const projectName = project[0]?.name || `Project #${task.project_id}`;
+      const projectName = project[0]?.projectName || `Project #${task.project_id}`;
       const emp = await this.employeeRepository.findOne({ where: { userId } } as any);
       const email = await this.taskRepository.manager.connection.query(
         'SELECT email FROM users WHERE id = $1', [userId],
@@ -713,8 +708,8 @@ async moveTask(
       await this.notificationTriggers.newTaskAssigned(
         task.title || `Task #${task.id}`,
         projectName,
-        task.due_date ? new Date(task.due_date).toLocaleDateString('vi-VN') : 'Không có',
-        task.priority || 'Trung bình',
+        task.due_date ? new Date(task.due_date).toLocaleDateString('vi-VN') : 'Kh�ng c�',
+        task.priority || 'Trung b�nh',
         userId,
         email[0]?.email || undefined,
       );
@@ -735,6 +730,7 @@ async moveTask(
         await this.notificationTriggers.taskRevisionRequested(
           task.title || `Task #${task.id}`,
           'Admin',
+          reason,
           a.userId,
           email[0]?.email || undefined,
         );
@@ -873,7 +869,32 @@ async moveTask(
   async getCategory() {
     return this.categoryRepository.find({});
   }
+
+  private async fireTaskBecameUrgentNotif(task: Task) {
+    try {
+      const assignees = await this.assigneeRepository.find({ where: { taskId: Number(task.id) } as any });
+      const project = await this.taskRepository.manager.connection.query(
+        'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
+      );
+      const projectName = project[0]?.projectName || `Project #${task.project_id}`;
+
+      for (const assignee of assignees) {
+        const user = await this.userRepo.findOne({ where: { id: assignee.userId }});
+        if (user) {
+          await this.notificationTriggers.taskBecameUrgent(
+            task.title || `Task #${task.id}`,
+            projectName,
+            assignee.userId,
+            user.email,
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.error(`[NOTIF] fireTaskBecameUrgentNotif error: ${(err as any).message}`);
+    }
+  }
 }
+
 
 
 

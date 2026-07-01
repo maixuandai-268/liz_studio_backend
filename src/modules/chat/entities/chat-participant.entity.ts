@@ -31,3 +31,4 @@ export class ChatParticipant {
   @JoinColumn({ name: 'user_id' })
   user: User;
 }
+

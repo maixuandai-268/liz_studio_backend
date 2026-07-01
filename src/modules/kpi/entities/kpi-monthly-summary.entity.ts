@@ -38,3 +38,4 @@ export class KpiMonthlySummary {
   @JoinColumn({ name: 'user_id' })
   user: User;
 }
+

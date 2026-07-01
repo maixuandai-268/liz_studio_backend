@@ -43,3 +43,4 @@ export class UpdateShopDto {
   @Max(9.9)
   rating?: number;
 }
+

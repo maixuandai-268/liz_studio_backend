@@ -20,3 +20,4 @@ import { NotificationsModule } from '@/modules/notifications/notifications.modul
   exports: [ProjectService],
 })
 export class ProjectsModule {}
+

@@ -34,3 +34,4 @@ export class ChatRoom {
   @OneToMany(() => Message, (m) => m.room)
   messages: Message[];
 }
+

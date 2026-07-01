@@ -45,3 +45,4 @@ export class Projects {
   @OneToMany(() => Task, (task) => task.project)
   task: Task[];
 }
+

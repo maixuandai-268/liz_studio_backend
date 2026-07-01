@@ -62,7 +62,7 @@ export class AttendanceService {
 
   private toLocalTime(iso: Date): { h: number; m: number } {
     const d = new Date(iso.getTime() + 7 * 60 * 60 * 1000);
-    return { h: d.getUTCHours(), m: d.getUTCMinutes() }; // UTC methods after offset shift
+    return { h: d.getUTCHours(), m: d.getUTCMinutes() };
   }
 
   private isWorkDay(date: Date): boolean {
@@ -120,7 +120,7 @@ export class AttendanceService {
       throw new BadRequestException('Bạn đã điểm danh hôm nay rồi');
     }
 
-    const checkInTime = new Date(); // actual server time (not shifted)
+    const checkInTime = new Date();
     const lateMinutes = this.calculateLateMinutes(checkInTime);
     const status = lateMinutes > 0 ? 'm' : 'x';
 
@@ -174,20 +174,17 @@ export class AttendanceService {
     const now = new Date();
     record.checkOut = now;
 
-    // Geo optional for checkout
     if (dto.latitude && dto.longitude) {
-      (record as any).checkinLat = dto.latitude; // reuse same fields for simplicity
+      (record as any).checkinLat = dto.latitude;
       (record as any).checkinLng = dto.longitude;
     }
 
-    // Working minutes
     const msDiff = now.getTime() - record.checkIn.getTime();
     record.workingMinutes = Math.round(msDiff / 60000);
 
     if (dto.notes) record.notes = dto.notes;
     if (dto.evidenceUrl) record.evidenceUrl = dto.evidenceUrl;
 
-    // Recalculate status
     record.status = this.calculateStatus(
       record.lateMinutes,
       true,
@@ -212,7 +209,6 @@ export class AttendanceService {
     return saved;
   }
 
-  // ── My History ──
 
   async getMyHistory(userId: number, limit = 30) {
     const records = await this.attendanceRepo.find({
@@ -224,7 +220,6 @@ export class AttendanceService {
     return records;
   }
 
-  // ── My Stats ──
 
   async getMyStats(userId: number) {
     const today = this.todayString();
@@ -237,10 +232,8 @@ export class AttendanceService {
       where: { userId } as any,
     }) as unknown as AttendanceRecord[];
 
-    // Today's record
     const todayRecord = records.find((r) => r.attendanceDate === today);
 
-    // Month stats
     const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthPrefix));
     const totalWorkDays = monthRecords.length;
     const lateDays = monthRecords.filter((r) => r.status === 'm').length;
@@ -301,7 +294,6 @@ export class AttendanceService {
     return results;
   }
 
-  // ── Admin: Month Grid ──
 
   async getMonthGrid(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -327,10 +319,8 @@ export class AttendanceService {
             checkOut: record.checkOut?.toISOString(),
           };
         } else if (dayOfWeek === 0) {
-          // Sunday → weekend
           days[d] = { status: 'w' };
         } else {
-          // Weekday without record → absent
           days[d] = { status: 'o' };
         }
       }
@@ -353,7 +343,6 @@ export class AttendanceService {
     };
   }
 
-  // ── Admin: Monthly Summary ──
 
   async getMonthlySummary(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
@@ -376,7 +365,6 @@ export class AttendanceService {
         ? Math.round((workingDays / workdays) * 100)
         : 0;
 
-      // Calculate OT (over 10h)
       const totalOtMinutes = userRecords.reduce(
         (s, r) => s + Math.max(0, (r.workingMinutes || 0) - WORKDAY_MINUTES),
         0,
@@ -406,7 +394,6 @@ export class AttendanceService {
     };
   }
 
-  // ── Admin: Get by Date ──
 
   async getByDate(dateStr: string) {
     const records = await this.attendanceRepo.find({
@@ -430,7 +417,6 @@ export class AttendanceService {
     return enriched;
   }
 
-  // ── Admin: Get User Records ──
 
   async getUserRecords(userId: number, year?: number, month?: number) {
     if (year && month) {
@@ -448,7 +434,6 @@ export class AttendanceService {
     }) as unknown as AttendanceRecord[];
   }
 
-  // ── Admin: Approve / Edit ──
 
   async approveRecord(recordId: number, adminUserId: number, dto: ApproveAttendanceDto) {
     const record = await this.attendanceRepo.findOne({
@@ -470,3 +455,4 @@ export class AttendanceService {
     return saved;
   }
 }
+

@@ -25,3 +25,4 @@ export class Level {
   @Column({ nullable: true })
   salary_coefficient: number;
 }
+

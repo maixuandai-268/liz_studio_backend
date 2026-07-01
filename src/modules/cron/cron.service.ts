@@ -23,41 +23,52 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_8AM, { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleTaskReminders() {
-    this.logger.log('Running daily task reminders...');
+    this.logger.log('[CRON] Running handleTaskReminders...');
     const now = new Date();
-    const twoDaysFromNow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const oneDayFromNow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
     const tasks = await this.taskRepo.find({
       where: {
-        due_date: LessThan(twoDaysFromNow),
+        due_date: LessThan(oneDayFromNow),
         status: Not('done'),
+        priority: Not('urgent'),
       },
-      relations: ['assignees', 'project'],
+      relations: {
+        task_assignees: true,
+        project: true,
+      },
     });
+    
+    this.logger.log(`[CRON] Found ${tasks.length} tasks to set as urgent.`);
 
     for (const task of tasks) {
-      task.priority = 'Khẩn cấp';
+      this.logger.log(`[CRON] Processing task ID: ${task.id}`);
+      task.priority = 'urgent';
       await this.taskRepo.save(task as any);
       
-      for (const assignee of (task as any).assignees) {
+      for (const assignee of (task as any).task_assignees) {
         const user = await this.userRepo.findOne({ where: { id: assignee.userId }});
         if (user) {
+          this.logger.log(`[CRON] Found user ${user.id} (${user.email}) for task ${task.id}. Triggering notification.`);
           this.notificationTriggers.taskBecameUrgent(
             task.title,
             (task as any).project.projectName,
             assignee.userId,
             user.email,
-          ).catch(e => this.logger.error(`[NOTIF-CRON] ${e.message}`));
+          ).catch(e => this.logger.error(`[CRON-NOTIF-ERROR] For task ${task.id}: ${e.message}`));
+        } else {
+          this.logger.warn(`[CRON] User not found for assignee with userId: ${assignee.userId}`);
         }
       }
     }
+    this.logger.log('[CRON] Finished handleTaskReminders.');
   }
 
-  @Cron('15 8 * * 1-6', { timeZone: 'Asia/Ho_Chi_Minh' }) // 8:15 AM Mon-Sat
+  @Cron('15 8 * * 1-6', { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleCheckInReminders() {
     this.logger.log('Running check-in reminders...');
     const today = new Date().toISOString().split('T')[0];
-    const users = await this.userRepo.find({ where: { isActive: true }, relations: ['employee']});
+    const users = await this.userRepo.find({ where: { isActive: true }, relations: { employee: true }});
     
     for (const user of users) {
       const checkedIn = await this.attendanceRepo.count({ where: { userId: user.id, attendanceDate: today } as any });
@@ -71,11 +82,11 @@ export class CronService {
     }
   }
 
-  @Cron('0 18 * * 1-6', { timeZone: 'Asia/Ho_Chi_Minh' }) // 6:00 PM Mon-Sat
+  @Cron('0 18 * * 1-6', { timeZone: 'Asia/Ho_Chi_Minh' }) 
   async handleCheckOutReminders() {
     this.logger.log('Running check-out reminders...');
     const today = new Date().toISOString().split('T')[0];
-    const users = await this.userRepo.find({ where: { isActive: true }, relations: ['employee']});
+    const users = await this.userRepo.find({ where: { isActive: true }, relations: { employee: true }});
     
     for (const user of users) {
       const record = await this.attendanceRepo.findOne({ where: { userId: user.id, attendanceDate: today, checkOut: IsNull() } as any });
@@ -89,3 +100,4 @@ export class CronService {
     }
   }
 }
+

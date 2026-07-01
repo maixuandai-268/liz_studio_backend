@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -23,7 +23,6 @@ export class KpiService {
     private monthlySummaryRepo: Repository<KpiMonthlySummary>,
   ) {}
 
-  // ── Product Types ──
 
   async findAllProductTypes(): Promise<KpiProductType[]> {
     return this.productTypeRepo.find();
@@ -32,7 +31,7 @@ export class KpiService {
   async createProductType(dto: CreateProductTypeDto): Promise<KpiProductType> {
     const item = this.productTypeRepo.create(dto);
     const saved = await this.productTypeRepo.save(item);
-    this.logger.log(`[CREATE] Product type "${saved.name}" — base: ${saved.basePoints}`);
+    this.logger.log(`[CREATE] Product type "${saved.name}" � base: ${saved.basePoints}`);
     return saved;
   }
 
@@ -42,7 +41,7 @@ export class KpiService {
 
     Object.assign(item, dto);
     const saved = await this.productTypeRepo.save(item);
-    this.logger.log(`[UPDATE] Product type ${id} — base: ${saved.basePoints}`);
+    this.logger.log(`[UPDATE] Product type ${id} � base: ${saved.basePoints}`);
     return saved;
   }
 
@@ -77,7 +76,6 @@ export class KpiService {
       ? Math.min(Math.round((totalPoints / targetPoints) * 10000) / 100, 200)
       : 0;
 
-    // Upsert
     const existing = await this.monthlySummaryRepo.findOne({
       where: { userId, year, month } as any,
     });
@@ -237,6 +235,7 @@ export class KpiService {
     await this.summarizeAll(year, month);
   }
 }
+
 
 
 

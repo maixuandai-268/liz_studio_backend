@@ -16,3 +16,4 @@ export class CreateCheckInDto {
   @Max(180)
   longitude: number;
 }
+

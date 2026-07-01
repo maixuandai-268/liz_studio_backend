@@ -9,3 +9,4 @@ export class DeleteFileDto {
   @IsIn(['image'])
   resource_type?: 'image';
 }
+

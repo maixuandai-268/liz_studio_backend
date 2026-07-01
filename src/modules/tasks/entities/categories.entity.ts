@@ -17,3 +17,4 @@ export class Task_Categories {
   @OneToMany(() => Task, (task) => task.category)
   task: Task[];
 }
+

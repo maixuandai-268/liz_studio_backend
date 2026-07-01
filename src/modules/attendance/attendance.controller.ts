@@ -24,7 +24,6 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
-  // ── Employee: Check-in ──
 
   @Post('checkin')
   async checkIn(@Req() req, @Body(ValidationPipe) dto: CreateCheckInDto) {
@@ -33,7 +32,6 @@ export class AttendanceController {
     return this.attendanceService.checkIn(user.id, projectId, dto);
   }
 
-  // ── Employee: Check-out ──
 
   @Patch('checkout')
   async checkOut(@Req() req, @Body(ValidationPipe) dto: CreateCheckOutDto) {
@@ -42,7 +40,6 @@ export class AttendanceController {
     return this.attendanceService.checkOut(user.id, projectId, dto);
   }
 
-  // ── Employee: My History ──
 
   @Get('me')
   async getMyHistory(@Req() req) {
@@ -50,7 +47,6 @@ export class AttendanceController {
     return this.attendanceService.getMyHistory(user.id);
   }
 
-  // ── Employee: My Stats ──
 
   @Get('stats/me')
   async getMyStats(@Req() req) {
@@ -58,7 +54,6 @@ export class AttendanceController {
     return this.attendanceService.getMyStats(user.id);
   }
 
-  // ── Admin: Month Grid (bảng chấm công) ──
 
   @Get('grid')
   @UseGuards(RolesGuard)
@@ -69,7 +64,6 @@ export class AttendanceController {
     return this.attendanceService.getMonthGrid(year, month);
   }
 
-  // ── Admin: Monthly Summary ──
 
   @Get('summary')
   @UseGuards(RolesGuard)
@@ -80,7 +74,6 @@ export class AttendanceController {
     return this.attendanceService.getMonthlySummary(year, month);
   }
 
-  // ── Admin: Records by Date ──
 
   @Get('date')
   @UseGuards(RolesGuard)
@@ -90,7 +83,6 @@ export class AttendanceController {
     return this.attendanceService.getByDate(date);
   }
 
-  // ── Admin: User Records ──
 
   @Get('user/:userId')
   @UseGuards(RolesGuard)
@@ -106,7 +98,6 @@ export class AttendanceController {
     );
   }
 
-  // ── Admin: Approve / Edit Record ──
 
   @Patch(':id/approve')
   @UseGuards(RolesGuard)
@@ -120,3 +111,4 @@ export class AttendanceController {
     return this.attendanceService.approveRecord(Number(id), user.id, dto);
   }
 }
+

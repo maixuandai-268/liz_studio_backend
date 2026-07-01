@@ -4,7 +4,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 
-// Modules
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -57,3 +56,4 @@ import { ProjectsModule } from './modules/projects/projects.module';
   ],
 })
 export class AppModule {}
+

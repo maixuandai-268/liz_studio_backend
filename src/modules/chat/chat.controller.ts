@@ -22,7 +22,6 @@ export class ChatController {
 
   constructor(private chatService: ChatService) {}
 
-  // ── List rooms of current user ──
   @Get('rooms')
   async getUserRooms(@Req() req: any) {
     try {
@@ -35,7 +34,6 @@ export class ChatController {
     }
   }
 
-  // ── Get room by project ──
   @Get('room/by-project/:projectId')
   async getRoomByProject(@Param('projectId') projectId: string) {
     try {
@@ -57,7 +55,6 @@ export class ChatController {
     }
   }
 
-  // ── Group: create ──
   @Post('group')
   async createGroup(@Body() body: { name: string; projectId?: number; participantIds: number[] }, @Req() req: any) {
     try {
@@ -70,7 +67,6 @@ export class ChatController {
     }
   }
 
-  // ── Add participant to room ──
   @Post('room/:roomId/participants')
   async addParticipant(@Param('roomId') roomId: string, @Body() body: { userId: number }, @Req() req: any) {
     try {
@@ -83,7 +79,6 @@ export class ChatController {
     }
   }
 
-  // ── Remove participant from room ──
   @Delete('room/:roomId/participants/:targetUserId')
   async removeParticipant(@Param('roomId') roomId: string, @Param('targetUserId') targetUserId: string, @Req() req: any) {
     try {
@@ -108,7 +103,6 @@ export class ChatController {
     }
   }
 
-  // ── Get channel messages (legacy) ──
   @Get('channel/:projectId')
   async getChannelMessages(@Param('projectId') projectId: string, @Query('limit') limit?: string) {
     try {
@@ -119,7 +113,6 @@ export class ChatController {
     }
   }
 
-  // ── Send message to a room ──
   @Post('room/:roomId/message')
   async sendRoomMessage(
     @Param('roomId') roomId: string,
@@ -140,24 +133,15 @@ export class ChatController {
     }
   }
 
-  // ── Get messages of a room ──
-  @Get('room/:roomId/messages')
-  async getRoomMessagesById(
-    @Param('roomId') roomId: string,
-    @Query('limit') limit: string,
-    @Req() req: any,
-  ) {
+  @Post('messages/:id/read')
+  async markAsRead(@Param('id') messageId: string, @Req() req: any) {
     try {
       const userId = req.user?.id || req.user?.sub;
       if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-
-      const isInRoom = await this.chatService.isUserInRoom(Number(roomId), Number(userId));
-      if (!isInRoom) throw new HttpException('Not in room', HttpStatus.FORBIDDEN);
-
-      const limitNum = limit ? parseInt(limit, 10) : 50;
-      return await this.chatService.getRoomMessagesById(Number(roomId));
+      return await this.chatService.markMessageAsRead(Number(messageId), Number(userId));
     } catch (error) {
-      throw new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(error, HttpStatus.BAD_REQUEST);
     }
   }
 }
+

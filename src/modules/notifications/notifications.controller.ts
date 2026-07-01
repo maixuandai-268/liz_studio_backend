@@ -52,3 +52,4 @@ import {
       return this.notificationsService.delete(id);
     }
   }
+

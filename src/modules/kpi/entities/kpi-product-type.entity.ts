@@ -20,3 +20,4 @@ export class KpiProductType {
   @Column({ name: 'fn_percent', type: 'decimal', precision: 5, scale: 2, nullable: true })
   fnPercent: number;
 }
+

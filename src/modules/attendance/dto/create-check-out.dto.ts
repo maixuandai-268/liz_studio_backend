@@ -23,3 +23,4 @@ export class CreateCheckOutDto {
   @Max(180)
   longitude?: number;
 }
+

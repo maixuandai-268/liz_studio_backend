@@ -37,7 +37,6 @@ export class AuthService {
         );
       }
     } catch (err) {
-      // Silent fail
     }
   }
 
@@ -74,7 +73,6 @@ export class AuthService {
 
     await this.usersService.updateRefreshToken(user.id, refreshToken);
 
-    // Scan overdue tasks async
     this.scanOverdueTasks(user.id).catch(() => undefined);
 
     return {
@@ -106,3 +104,4 @@ export class AuthService {
     return { message: 'Logout success' };
   }
 }
+

@@ -26,3 +26,4 @@ export class CreateProductTypeDto {
   @Max(1)
   fnPercent?: number;
 }
+

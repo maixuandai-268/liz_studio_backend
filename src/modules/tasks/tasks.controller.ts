@@ -26,7 +26,6 @@ export class TaskController {
 
   @Post()
   create(@Body() createTaskDto: any) {
-    // FE sends project_id inside body
     const projectId = String(createTaskDto.project_id);
     return this.taskService.createTask(projectId, createTaskDto);
   }
@@ -46,7 +45,6 @@ export class TaskController {
     @Param('id') id: string, 
     @Body() updateTaskDto: any,
   ) {
-    // projectId optional, fallback in service
     return this.taskService.updateTask(
       id, 
       updateTaskDto,
@@ -78,7 +76,6 @@ export class TaskController {
     return this.taskService.deleteTask(id, projectId);
   }
 
-  // Assign member to task (with isMain)
   @Post(':id/assign')
   async assignTask(
     @Param('id') id: string,
@@ -87,7 +84,6 @@ export class TaskController {
     return this.taskService.assignTask(id, body.userId, body.isMain ?? false);
   }
 
-  // Unassign member from task
   @Delete(':id/assign/:userId')
   async unassignTask(
     @Param('id') id: string,
@@ -96,19 +92,16 @@ export class TaskController {
     return this.taskService.unassignTask(id, Number(userId));
   }
 
-  // Approve V1
   @Patch(':id/approve')
   async approveV1(@Param('id') id: string) {
     return this.taskService.approveV1(id);
   }
 
-  // Get all employees for assign dropdown
   @Get('employees/all')
   async getEmployees() {
     return this.taskService.getEmployees();
   }
 
-  // ── Phase Approval Flow ──
 
   @Post(':id/request-phase')
   async requestPhase(
@@ -144,7 +137,6 @@ export class TaskController {
     return this.taskService.revisionCompleted(id);
   }
 
-  // ── Links / Attachments ──
 
   @Post(':id/attachments')
   async addAttachment(
@@ -161,7 +153,6 @@ export class TaskController {
     return this.taskService.removeAttachment(Number(attachId));
   }
 
-  // ── KPI Allocation ──
 
   @Get(':id/kpi')
   async getTaskKpi(@Param('id') id: string) {
@@ -176,3 +167,4 @@ export class TaskController {
     return this.taskService.allocateKpi(id, body.allocations);
   }
 }
+

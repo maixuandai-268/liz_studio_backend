@@ -8,7 +8,6 @@ export class UploadService {
         const fileName = file.originalname.split('.')[0];
 
         return new Promise((resolve, reject) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             cloudinary.uploader
                 .upload_stream(
                     {
@@ -57,3 +56,4 @@ export class UploadService {
         return this.uploadFile(file);
     }
 }
+

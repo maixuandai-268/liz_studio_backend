@@ -70,3 +70,4 @@ export class SalaryRecord {
   @CreateDateColumn()
   createdAt: Date;
 }
+

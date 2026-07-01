@@ -20,6 +20,8 @@ import { TaskCommentsController } from './sub-resources/task-comments.controller
 import { TaskChecklistController } from './sub-resources/task-checklist.controller';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { TasksChecklistsService } from './sub-resources/tasks-checklists.service';
+import { TaskCommentsService } from './sub-resources/task-comments.service';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
@@ -34,7 +36,8 @@ import { TasksChecklistsService } from './sub-resources/tasks-checklists.service
       TaskKpiAllocation,
       TaskPhaseApproval,
       Projects,
-      Employee
+      Employee,
+      User,
     ]),
     RealtimeModule,
     TaskLogsModule,
@@ -43,6 +46,7 @@ import { TasksChecklistsService } from './sub-resources/tasks-checklists.service
   ],
   controllers: [TaskController, TaskCommentsController, TaskChecklistController],
   providers: [TasksService, TasksChecklistsService, TaskCommentsService],
-  exports: [TasksService, TasksChecklistsService],
+  exports: [TasksService, TasksChecklistsService, TaskCommentsService],
 })
 export class TasksModule {}
+

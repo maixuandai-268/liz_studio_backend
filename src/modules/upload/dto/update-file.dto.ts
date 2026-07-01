@@ -8,3 +8,4 @@ export class UpdateFileDto {
   @IsIn(['image'])
   resource_type: 'image';
 }
+

@@ -23,3 +23,4 @@ export class CreateLevelDto {
   @Min(0)
   salary_coefficient?: number;
 }
+

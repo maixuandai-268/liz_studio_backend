@@ -38,3 +38,4 @@ export class TaskForm {
   @OneToMany(() => TaskFormSubmission, (s) => s.form)
   submissions: TaskFormSubmission[];
 }
+

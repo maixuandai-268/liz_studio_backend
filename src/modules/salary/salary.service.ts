@@ -40,7 +40,6 @@ export class SalaryService {
     }
   }
 
-  // ── Quarters ──
 
   async createQuarter(dto: { quarter: number; year: number; created_by: number }) {
     const { quarter, year, created_by } = dto;
@@ -49,7 +48,6 @@ export class SalaryService {
 
     const name = `Q${quarter}/${year}`;
 
-    // Check if any period already exists for this quarter
     const existing = await this.periodRepo.find({ where: { quarter, year } as any });
     if (existing.length > 0) {
       throw new BadRequestException(`Quý ${name} đã tồn tại`);
@@ -91,7 +89,6 @@ export class SalaryService {
     return Array.from(map.values());
   }
 
-  // ── Preview (no save) ──
 
   async preview(periodId: number) {
     const period = await this.getPeriod(periodId);
@@ -126,7 +123,6 @@ export class SalaryService {
       const kpiComponent = Math.round(kpiSalary * (productivityPercentage / 100) * 100) / 100;
       const grossSalary = Math.round((baseSalary + kpiComponent) * 100) / 100;
 
-      // Try to find existing saved record
       const existingRecord = await this.recordRepo.findOne({
         where: { period_id: periodId, userId: emp.userId } as any,
       });
@@ -147,14 +143,13 @@ export class SalaryService {
         penalty: existingRecord ? Number(existingRecord.penalty) : 0,
         net_salary: Math.round((grossSalary + (existingRecord ? Number(existingRecord.bonus) : 0) - (existingRecord ? Number(existingRecord.penalty) : 0)) * 100) / 100,
         record_id: existingRecord?.id || null,
-        status: existingRecord?.status || null, // null = not saved, 'pending' = saved, 'approved' = done
+        status: existingRecord?.status || null,
       });
     }
 
     return previews;
   }
 
-  // ── Save records (batch upsert) ──
 
   async saveRecords(
     periodId: number,
@@ -164,7 +159,6 @@ export class SalaryService {
     const saved: SalaryRecord[] = [];
 
     for (const rec of records) {
-      // Calculate fresh preview values for this user
       const emp = await this.employeeRepo.findOne({ where: { userId: rec.userId } as any });
       if (!emp) continue;
 
@@ -195,7 +189,6 @@ export class SalaryService {
       const grossSalary = Math.round((baseSalary + kpiComponent) * 100) / 100;
       const netSalary = Math.round((grossSalary + rec.bonus - rec.penalty) * 100) / 100;
 
-      // Upsert
       let record = await this.recordRepo.findOne({
         where: { period_id: periodId, userId: rec.userId } as any,
       });
@@ -227,7 +220,6 @@ export class SalaryService {
       saved.push(await this.recordRepo.save(record as any));
     }
 
-    // Update period status
     period.status = 'calculated';
     await this.periodRepo.save(period as any);
 
@@ -235,7 +227,6 @@ export class SalaryService {
     return saved;
   }
 
-  // ── Periods ──
 
   async createPeriod(dto: { name: string; month: number; year: number; quarter?: number; pay_date?: string; created_by: number }) {
     const existing = await this.periodRepo.findOne({ where: { month: dto.month, year: dto.year } as any });
@@ -264,10 +255,8 @@ export class SalaryService {
     return period;
   }
 
-  // ── Records ──
 
   async calculate(periodId: number) {
-    // Legacy — still supported but saveRecords is preferred
     const period = await this.getPeriod(periodId);
     const employees = await this.employeeRepo.find();
 
@@ -390,3 +379,4 @@ export class SalaryService {
     return { success: true };
   }
 }
+

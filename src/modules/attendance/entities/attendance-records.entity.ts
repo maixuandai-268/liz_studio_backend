@@ -60,3 +60,4 @@ export class AttendanceRecord {
   @JoinColumn({ name: 'approved_by' })
   approver: User;
 }
+

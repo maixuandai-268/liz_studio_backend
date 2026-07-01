@@ -3,7 +3,10 @@ import {
   PrimaryGeneratedColumn, 
   Column, 
   CreateDateColumn, 
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { User } from '@/modules/users/entities/user.entity';
 
 @Entity('task_comments')
 export class TaskComment {
@@ -16,9 +19,14 @@ export class TaskComment {
   @Column({nullable :true})   
   userId : number;
 
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'userId' })
+  user: User;
+
   @Column({nullable :true})
   content : string;
 
   @CreateDateColumn()
   createdAt: Date;
 }
+

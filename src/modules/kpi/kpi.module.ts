@@ -13,3 +13,4 @@ import { KpiService } from './kpi.service';
   exports: [KpiService],
 })
 export class KpiModule {}
+

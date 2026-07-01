@@ -20,3 +20,4 @@ import { User } from '@/modules/users/entities/user.entity';
   exports: [SalaryService],
 })
 export class SalaryModule {}
+

@@ -32,3 +32,4 @@ export class ActivityLog {
   @JoinColumn({ name: 'user_id' })
   user: User;
 }
+
