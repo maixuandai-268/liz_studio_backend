@@ -7,6 +7,9 @@ import { ChatParticipant } from './entities/chat-participant.entity';
 import { RealtimeService } from '@/modules/realtime/realtime.service';
 import { NotificationTriggersService } from '@/modules/notifications/notification-triggers.service';
 import { User } from '@/modules/users/entities/user.entity';
+import { CursorQueryDto, PaginatedResponseDto } from '@/common/dto/pagination.dto';
+import { CursorService } from '@/common/services/cursor.service';
+import { MessageDto } from './dto/message.dto';
 
 @Injectable()
 export class ChatService {
@@ -23,6 +26,7 @@ export class ChatService {
     private notificationTriggers: NotificationTriggersService,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    private cursorService: CursorService,
   ) {}
 
   private async fireChatNotif(roomId: number, senderId: number, content: string) {
@@ -346,6 +350,64 @@ export class ChatService {
     });
 
     return { affected: result.affected };
+  }
+
+  async findRoomMessagesWithCursor(
+    roomId: number,
+    query: CursorQueryDto,
+  ): Promise<PaginatedResponseDto<MessageDto>> {
+    const limit = Math.min(query.limit || 30, 100);
+    const cursor = query.cursor ? this.cursorService.decode(query.cursor) : null;
+
+    const qb = this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.user', 'user')
+      .leftJoinAndSelect('user.employee', 'employee')
+      .where('message.roomId = :roomId', { roomId })
+      .orderBy('message.createdAt', 'DESC')
+      .addOrderBy('message.id', 'DESC')
+      .limit(limit + 1);
+
+    if (cursor) {
+      qb.andWhere('(message.createdAt, message.id) < (:createdAt, :id)', {
+        createdAt: new Date(cursor.createdAt),
+        id: cursor.id,
+      });
+    }
+
+    const items = await qb.getMany();
+
+    const hasMore = items.length > limit;
+    if (hasMore) {
+      items.pop();
+    }
+
+    const nextCursor =
+      items.length > 0
+        ? this.cursorService.encode({
+            createdAt: items[items.length - 1].createdAt.toISOString(),
+            id: items[items.length - 1].id,
+          })
+        : null;
+
+    const dtos = items.map((msg) => ({
+      id: msg.id,
+      content: msg.content,
+      createdAt: msg.createdAt.toISOString(),
+      updatedAt: msg.createdAt.toISOString(), // Assuming no updates
+      roomId: msg.roomId,
+      sender: {
+        id: msg.user.id,
+        name: msg.user.employee?.full_name || `User ${msg.user.id}`,
+        avatar_url: msg.user.employee?.avatar_url,
+      },
+    }));
+
+    return {
+      items: dtos,
+      nextCursor,
+      hasMore,
+    };
   }
 }
 

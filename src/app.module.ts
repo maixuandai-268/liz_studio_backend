@@ -22,6 +22,7 @@ import { TasksModule } from './modules/tasks/tasks.module';
 import { ChannelModule } from './modules/chat/channels/channel.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
@@ -52,7 +53,8 @@ import { ProjectsModule } from './modules/projects/projects.module';
     NotificationsModule,
     ChannelModule,
     UploadModule,
-    ProjectsModule
+    ProjectsModule,
+    CommonModule
   ],
 })
 export class AppModule {}

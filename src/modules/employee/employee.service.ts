@@ -2,10 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee } from './entities/emplyee.entity';
+import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/users.service';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
 
 @Injectable()
 export class EmployeeService {
   constructor(
+    private readonly userService: UsersService,
+
     @InjectRepository(Employee)
     private employeeRepo: Repository<Employee>,
   ) {}
@@ -23,10 +28,21 @@ export class EmployeeService {
     return this.employeeRepo.findOne({ where: { userId } });
   }
 
-  create(data: Partial<Employee>) {
-    const emp = this.employeeRepo.create(data);
-    return this.employeeRepo.save(emp);
-  }
+ async create(data: CreateEmployeeDto) {
+  const user = await this.userService.create({
+    email: data.email,
+    password: data.password,
+    employee_code: data.employee_code,
+    role: 'employee',
+  });
+
+  const emp = this.employeeRepo.create({
+    ...data,
+    userId: user.id,
+  });
+
+  return await this.employeeRepo.save(emp);
+}
 
   async update(id: number | string, data: any) {
     const empId = Number(id);

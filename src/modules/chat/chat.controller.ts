@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { CursorQueryDto, PaginatedResponseDto } from '@/common/dto/pagination.dto';
+import { MessageDto } from './dto/message.dto';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
@@ -100,6 +102,19 @@ export class ChatController {
       return await this.chatService.sendMessage(body.projectId, String(userId), userName, body.content);
     } catch (error) {
       throw new HttpException(error || 'Failed to send message', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Get('room/:roomId/messages/v2')
+  async getRoomMessagesV2(
+    @Param('roomId') roomId: string,
+    @Query() query: CursorQueryDto,
+  ): Promise<PaginatedResponseDto<MessageDto>> {
+    try {
+      return await this.chatService.findRoomMessagesWithCursor(Number(roomId), query);
+    } catch (error) {
+      this.logger.error(`Failed to fetch messages v2: ${error}`);
+      throw new HttpException(error || 'Failed to fetch messages', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
