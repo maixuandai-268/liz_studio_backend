@@ -1,11 +1,12 @@
 /* eslint-disable prettier/prettier */
-import { IsOptional, IsNumberString, IsString } from 'class-validator';
+import { IsOptional, IsNumberString, IsString, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CursorQueryDto {
   @IsOptional()
-  @IsNumberString()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   limit?: number;
 
   @IsOptional()
