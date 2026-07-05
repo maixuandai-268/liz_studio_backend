@@ -8,6 +8,7 @@ import { ChatController } from './chat.controller';
 import { RealtimeModule } from '@/modules/realtime/realtime.module';
 import { NotificationsModule } from '@/modules/notifications/notifications.module';
 import { Channel } from './entities/channel.entity';
+import { ChannelService } from './channels/channel.service';
 import { User } from '@/modules/users/entities/user.entity';
 
 @Module({
@@ -17,8 +18,8 @@ import { User } from '@/modules/users/entities/user.entity';
     NotificationsModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService],
-  exports: [ChatService],
+  providers: [ChatService, ChannelService],
+  exports: [ChatService, ChannelService],
 })
 export class ChatModule {}
 

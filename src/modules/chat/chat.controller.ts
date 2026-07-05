@@ -13,6 +13,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { ChannelService } from './channels/channel.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { CursorQueryDto, PaginatedResponseDto } from '@/common/dto/pagination.dto';
 import { MessageDto } from './dto/message.dto';
@@ -22,7 +23,10 @@ import { MessageDto } from './dto/message.dto';
 export class ChatController {
   private logger = new Logger('ChatController');
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private channelService: ChannelService,
+  ) {}
 
   @Get('rooms')
   async getUserRooms(@Req() req: any) {
@@ -115,6 +119,19 @@ export class ChatController {
     } catch (error) {
       this.logger.error(`Failed to fetch messages v2: ${error}`);
       throw new HttpException(error || 'Failed to fetch messages', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Get('channels/:channelName/messages/v2')
+  async getChannelMessagesV2(
+    @Param('channelName') channelName: string,
+    @Query() query: CursorQueryDto,
+  ) {
+    try {
+      return await this.channelService.findChannelMessagesWithCursor(channelName, query);
+    } catch (error) {
+      this.logger.error(`Failed to fetch channel messages v2: ${error}`);
+      throw new HttpException(error || 'Failed to fetch channel messages', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
