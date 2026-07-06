@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpException,
   HttpStatus,
@@ -17,6 +18,8 @@ import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { CreateChannelDto } from '../dto/create-channel.dto';
 import { UpdateChannelDto } from '../dto/update-channel.dto';
+import { CursorQueryDto, PaginatedResponseDto } from '@/common/dto/pagination.dto';
+import { MessageDto } from '../dto/message.dto';
 
 @Controller('channels')
 export class ChannelController {
@@ -111,6 +114,24 @@ export class ChannelController {
     } catch (error) {
       this.logger.error(`Failed to delete channel: ${error}`);
       throw new HttpException(error, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  /**
+   * GET /api/channels/:channelName/messages/v2
+   * Lấy messages của channel với cursor pagination
+   */
+  @Get(':channelName/messages/v2')
+  @UseGuards(JwtAuthGuard)
+  async getChannelMessagesV2(
+    @Param('channelName') channelName: string,
+    @Query() query: CursorQueryDto,
+  ): Promise<PaginatedResponseDto<MessageDto>> {
+    try {
+      return await this.channelService.findChannelMessagesWithCursor(channelName, query);
+    } catch (error) {
+      this.logger.error(`Failed to fetch channel messages v2: ${error}`);
+      throw new HttpException(error || 'Failed to fetch messages', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

@@ -28,7 +28,6 @@ import { CreateUserDto } from './dto/create-user.dto';
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UsersService) {
-    console.log("UserController loaded");
   }
 
   @Post()
