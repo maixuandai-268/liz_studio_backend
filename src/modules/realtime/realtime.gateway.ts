@@ -178,7 +178,7 @@ export class RealtimeGateway
       message.trim(),
     );
 
-    this.server.to(`project-${projectId}`).emit('chat:message', {
+    this.server.to(`project-${projectId}`).emit('chat.message', {
       ...savedMessage,
       channel: projectId,
     });

@@ -112,6 +112,14 @@ for (const view of dto.views) {
     if (!project) {
       throw new BadRequestException(`Không tìm thấy Project với id ${id}`);
     }
+
+    // Delete associated chat room, its participants, and messages
+    try {
+      await this.chatService.deleteRoomByProjectId(id);
+    } catch (e) {
+      console.error('Failed to delete project chat room:', e);
+    }
+
     return await this.projectRepo.remove(project);
   }
 

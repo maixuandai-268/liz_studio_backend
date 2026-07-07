@@ -31,22 +31,16 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto) {
-  const user = await this.userRepo.save(
-    this.userRepo.create({
-      employee_code: createUserDto.employee_code,
-      email: createUserDto.email,
-      password: createUserDto.password,
-    }),
-  );
-
-  await this.empRepo.save(
-    this.empRepo.create({
-      userId: user.id,
-    }),
-  );
-
-  return user;
-}
+    const user = await this.userRepo.save(
+      this.userRepo.create({
+        employee_code: createUserDto.employee_code,
+        email: createUserDto.email,
+        password: createUserDto.password,
+        role: createUserDto.role || 'employee',
+      }),
+    );
+    return user;
+  }
 
   findByEmailWithPassword(email: string) {
     return this.userRepo
@@ -60,7 +54,7 @@ export class UsersService {
     const userId = Number(id);
     const user = await this.userRepo.findOneBy({ id: userId });
     if (!user) {
-      throw new NotFoundException(`Có l?i khi tìm id ngu?i dùng : ${userId}`);
+      throw new NotFoundException(`Cï¿½ l?i khi tï¿½m id ngu?i dï¿½ng : ${userId}`);
     }
 
     Object.assign(user, updateUserDto);

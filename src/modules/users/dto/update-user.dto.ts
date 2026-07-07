@@ -15,12 +15,14 @@ export class UpdateUserDto {
   @IsString()
   employee_code?: string;
 
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(6)
-  password: string;
+  password?: string;
 
   @IsOptional()
   isActive?: boolean;

@@ -409,5 +409,14 @@ export class ChatService {
       hasMore,
     };
   }
+
+  async deleteRoomByProjectId(projectId: number): Promise<void> {
+    const room = await this.chatRoomRepository.findOneBy({ projectId });
+    if (room) {
+      await this.participantRepository.delete({ roomId: room.id });
+      await this.messageRepository.delete({ roomId: room.id });
+      await this.chatRoomRepository.remove(room);
+    }
+  }
 }
 
