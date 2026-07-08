@@ -16,8 +16,17 @@ export class EmployeeService {
     private employeeRepo: Repository<Employee>,
   ) {}
 
-  async findAll() {
-    return this.employeeRepo.find();
+  async findAll(role?: string) {
+    const qb = this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.user', 'user');
+
+    if (role === 'employee') {
+      qb.where('user.role = :role', { role });
+    }
+
+    const emps = await qb.getMany();
+    return emps;
   }
   
 
@@ -34,9 +43,9 @@ export class EmployeeService {
   const hashedPassword = await bcrypt.hash(data.password || '123456', 10);
 
   const user = await this.userService.create({
-    email: data.email || `${Date.now()}@lizstudio.local`, // fallback if email is missing
+    email: data.email || `${Date.now()}@lizstudio.local`,
     password: hashedPassword,
-    employee_code: undefined,
+    employee_code: data.employee_code || String(Date.now()),
     role: data.role || 'employee',
   });
 
@@ -45,20 +54,27 @@ export class EmployeeService {
     userId: user.id,
   });
 
-  const savedEmp = await this.employeeRepo.save(emp);
-
-  // Update user's employee_code with the saved employee's ID as requested
-  await this.userService.update(user.id, {
-    employee_code: String(savedEmp.id),
-  });
-
-  return savedEmp;
+  return this.employeeRepo.save(emp);
 }
 
   async update(id: number | string, data: any) {
     const empId = Number(id);
     const emp = await this.employeeRepo.findOneBy({ id: empId });
     if (!emp) throw new Error(`Employee not found: ${empId}`);
+
+    // If password is provided, hash and update on the User table
+    if (data.password) {
+      const hashed = await bcrypt.hash(data.password, 10);
+      await this.userService.update(emp.userId, { password: hashed });
+      delete data.password;
+    }
+
+    // If email is provided, update on the User table
+    if (data.email) {
+      await this.userService.update(emp.userId, { email: data.email });
+      delete data.email;
+    }
+
     Object.assign(emp, data);
     return this.employeeRepo.save(emp);
   }

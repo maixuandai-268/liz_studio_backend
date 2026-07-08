@@ -54,10 +54,8 @@ export class UserController {
   @Delete(':id')
   async deleteUser(@Param('id') id: string) {
     const userId = Number(id);
-    console.log("🗑️ [UserController] DELETE /api/users/:id received - ID:", userId, "TYPE:", typeof userId);
     try {
       const result = await this.userService.remove(userId);
-      console.log("✅ [UserController] DELETE successful - Affected rows:", result.affected);
       return result;
     } catch (err) {
       console.error("❌ [UserController] DELETE failed:");

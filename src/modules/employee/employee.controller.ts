@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Req, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Req, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 
@@ -14,8 +14,8 @@ export class EmployeeController {
   }
 
   @Get()
-  async getAllEmployees() {
-    return this.employeeService.findAll();
+  async getAllEmployees(@Query('role') role?: string) {
+    return this.employeeService.findAll(role);
   }
   
   @Get(':id')

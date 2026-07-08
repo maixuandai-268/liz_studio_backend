@@ -63,25 +63,18 @@ export class UsersService {
 
   async remove(id: number | string) {
     const userId = Number(id);
-    console.log("??? [UsersService] Removing user with ID:", userId, "(converted from", typeof id, ")");
 
     const user = await this.userRepo.findOneBy({ id: userId });
     if (!user) {
       console.error("? [UsersService] User not found with ID:", userId);
       throw new NotFoundException(`User not found: ${userId}`);
     }
-
-    console.log("? [UsersService] User found:", user.email);
-
-    console.log("??? [UsersService] Deleting user...");
     const result = await this.userRepo.delete({ id: userId });
 
     if (result.affected === 0) {
       console.error("? [UsersService] Delete affected 0 rows - something went wrong");
       throw new Error(`Delete failed: No rows affected for user ID ${userId}`);
     }
-
-    console.log("? [UsersService] Delete successful - Affected rows:", result.affected);
     return result;
   }
 

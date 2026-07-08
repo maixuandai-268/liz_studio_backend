@@ -51,13 +51,13 @@ export class AttendanceService {
 
   private todayString(): string {
     const d = this.localNow();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
   }
 
   private localNow(): Date {
     const now = new Date();
-    const local = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-    return local;
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    return new Date(utc + 7 * 3600000);
   }
 
   private toLocalTime(iso: Date): { h: number; m: number } {
@@ -154,6 +154,9 @@ export class AttendanceService {
       this.fireLateCheckInNotif(userId, dto.notes).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
     }
 
+    // Update employee employment_status on check-in
+    this.employeeRepo.update({ userId }, { employment_status: true } as any).catch(e => this.logger.error(`[empStatus] ${e.message}`));
+
     return saved;
   }
 
@@ -206,6 +209,10 @@ export class AttendanceService {
     this.logger.log(
       `[CHECKOUT] User ${userId} at ${now.toISOString()} — worked ${record.workingMinutes}min`,
     );
+
+    // Update employee employment_status on check-out
+    this.employeeRepo.update({ userId }, { employment_status: false } as any).catch(e => this.logger.error(`[empStatus] ${e.message}`));
+
     return saved;
   }
 
@@ -298,7 +305,11 @@ export class AttendanceService {
   async getMonthGrid(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-    const employees = await this.employeeRepo.find({}) as unknown as Employee[];
+    const employees = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.user', 'user')
+      .where('user.role = :role', { role: 'employee' })
+      .getMany() as unknown as Employee[];
     const records = await this.attendanceRepo.find({}) as unknown as AttendanceRecord[];
     const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthStr));
 
@@ -347,7 +358,11 @@ export class AttendanceService {
   async getMonthlySummary(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-    const employees = await this.employeeRepo.find({}) as unknown as Employee[];
+    const employees = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.user', 'user')
+      .where('user.role = :role', { role: 'employee' })
+      .getMany() as unknown as Employee[];
     const records = await this.attendanceRepo.find({}) as unknown as AttendanceRecord[];
     const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthStr));
 

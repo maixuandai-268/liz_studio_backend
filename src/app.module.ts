@@ -32,6 +32,8 @@ import { CommonModule } from './common/common.module';
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
       synchronize: true,
+      // @ts-expect-error: timezone is valid for PG but missing in TS types
+      timezone: '+07:00',
       ssl: {
         rejectUnauthorized: false,
       },

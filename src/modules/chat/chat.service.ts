@@ -263,7 +263,6 @@ export class ChatService {
             createdAt: "ASC",
         },
     })
-    console.log(messages);
 
     return messages.map(message => ({
         id: message.id,

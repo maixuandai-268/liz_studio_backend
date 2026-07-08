@@ -92,7 +92,11 @@ export class SalaryService {
 
   async preview(periodId: number) {
     const period = await this.getPeriod(periodId);
-    const employees = await this.employeeRepo.find();
+    const employees = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.user', 'user')
+      .where('user.role = :role', { role: 'employee' })
+      .getMany();
 
     const previews: any[] = [];
 
@@ -258,7 +262,11 @@ export class SalaryService {
 
   async calculate(periodId: number) {
     const period = await this.getPeriod(periodId);
-    const employees = await this.employeeRepo.find();
+    const employees = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.user', 'user')
+      .where('user.role = :role', { role: 'employee' })
+      .getMany();
 
     const records: SalaryRecord[] = [];
 
