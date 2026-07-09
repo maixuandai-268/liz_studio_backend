@@ -50,23 +50,26 @@ export class AttendanceService {
 
 
   private todayString(): string {
-    const d = this.localNow();
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-  }
+    const now = new Date();
+
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+    }).format(now);
+}
 
   private localNow(): Date {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    return new Date(utc + 7 * 3600000);
-  }
+    return new Date();
+}
 
-  private toLocalTime(iso: Date): { h: number; m: number } {
-    const d = new Date(iso.getTime() + 7 * 60 * 60 * 1000);
-    return { h: d.getUTCHours(), m: d.getUTCMinutes() };
-  }
+  private toLocalTime(date: Date) {
+    return {
+        h: date.getHours(),
+        m: date.getMinutes(),
+    };
+}
 
   private isWorkDay(date: Date): boolean {
-    return WORKDAYS.includes(date.getUTCDay());
+    return WORKDAYS.includes(date.getDay());
   }
 
   private countWorkdaysInMonth(year: number, monthIndex: number): number {

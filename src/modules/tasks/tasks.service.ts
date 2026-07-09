@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
 import { TaskAssignee } from './entities/task-assignee.entity';
 import { TaskKpiAllocation } from './entities/task-kpi-allocation.entity';
@@ -332,21 +332,23 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
       throw new NotFoundException(`Task ${taskId} not found`);
     }
 
-    const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } as any });
-    const assigneeInfos = await Promise.all(
-      assignees.map(async (a) => {
-        const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } as any });
-        return {
-          userId: a.userId,
-          full_name: emp?.full_name || 'Unknown',
-          avatar_url: emp?.avatar_url || '',
-          assignedAt: a.assignedAt,
-          is_main: a.is_main,
-        };
-      }),
-    );
+    const [assignees, attachments, employees] = await Promise.all([
+      this.assigneeRepository.find({ where: { taskId: taskIdNum } as any }),
+      this.attachmentRepository.find({ where: { taskId: taskIdNum } as any }),
+      this.employeeRepository.find(),
+    ]);
 
-    const attachments = await this.attachmentRepository.find({ where: { taskId: taskIdNum } as any });
+    const employeeMap = new Map(employees.map((e) => [e.userId, e]));
+    const assigneeInfos = assignees.map((a) => {
+      const emp = employeeMap.get(a.userId);
+      return {
+        userId: a.userId,
+        full_name: (emp as any)?.full_name || 'Unknown',
+        avatar_url: (emp as any)?.avatar_url || '',
+        assignedAt: a.assignedAt,
+        is_main: a.is_main,
+      };
+    });
 
     return { ...task, assignees: assigneeInfos, attachments };
   }
@@ -831,36 +833,53 @@ async moveTask(
     return this.employeeRepository.find({});
   }
 
-  async getAllTasks() {
-    const tasks = await this.taskRepository.find({
+async getAllTasks() {
+  const [tasks, assignees, employees, categories] = await Promise.all([
+    this.taskRepository.find({
       order: { createdAt: 'DESC' } as any,
-    });
+    }),
+    this.assigneeRepository.find(),
+    this.employeeRepository.find(),
+    this.categoryRepository.find(),
+  ]);
 
-    const tasksWithAssignees = await Promise.all(
-      tasks.map(async (task) => {
-        const assignees = await this.assigneeRepository.find({ where: { taskId: task.id } as any });
-        const assigneeInfos = await Promise.all(
-          assignees.map(async (a) => {
-            const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } as any });
-            return {
-              userId: a.userId,
-              full_name: emp?.full_name || 'Unknown',
-              avatar_url: emp?.avatar_url || '',
-              is_main: a.is_main,
-            };
-          }),
-        );
-        let categoryName: string | undefined;
-        if (task.category_id) {
-          const cat = await this.categoryRepository.findOne({ where: { id: task.category_id } as any });
-          categoryName = cat?.tittle;
-        }
-        return { ...task, assignees: assigneeInfos, category: categoryName ? { tittle: categoryName } : undefined };
-      }),
-    );
+  const employeeMap = new Map(
+    employees.map((e) => [e.userId, e]),
+  );
 
-    return tasksWithAssignees;
+  const categoryMap = new Map(
+    categories.map((c) => [c.id, c]),
+  );
+
+  const assigneeMap = new Map<number, any[]>();
+
+  for (const a of assignees) {
+    const emp = employeeMap.get(a.userId);
+
+    const item = {
+      userId: a.userId,
+      full_name: emp?.full_name ?? "Unknown",
+      avatar_url: emp?.avatar_url ?? "",
+      is_main: a.is_main,
+    };
+
+    if (!assigneeMap.has(a.taskId)) {
+      assigneeMap.set(a.taskId, []);
+    }
+
+    assigneeMap.get(a.taskId)!.push(item);
   }
+
+  return tasks.map((task) => ({
+    ...task,
+    assignees: assigneeMap.get(task.id) ?? [],
+    category: task.category_id
+      ? {
+          tittle: categoryMap.get(task.category_id)?.tittle,
+        }
+      : undefined,
+  }));
+}
 
   async createCategory(ctg: CreateCategoryDto) {
     return await this.categoryRepository.save(ctg as any);
@@ -869,6 +888,16 @@ async moveTask(
   async getCategory() {
     return this.categoryRepository.find({});
   }
+
+  async getAssignees(taskId: number) {
+    const assignees = await this.assigneeRepository.find({ where: { taskId } as any });
+    const userIds = assignees.map(a => a.userId);
+    if (userIds.length === 0) {
+      return [];
+    }
+    return this.employeeRepository.find({ where: { userId: In(userIds) } as any });
+  }
+
 
   private async fireTaskBecameUrgentNotif(task: Task) {
     try {
