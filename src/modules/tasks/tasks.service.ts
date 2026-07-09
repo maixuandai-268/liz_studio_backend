@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Task } from './entities/task.entity';
 import { TaskAssignee } from './entities/task-assignee.entity';
 import { TaskKpiAllocation } from './entities/task-kpi-allocation.entity';
@@ -42,8 +42,52 @@ export class TasksService {
     private notificationTriggers: NotificationTriggersService,
   ) {}
 
-
   private readonly PHASE_ORDER = ['todo', 'wip', 'review', 'v1', 'v2', 'done'];
+
+  // Cache employee map for 30s to avoid repeated employee queries
+  private employeeMapCache: Map<number, { full_name: string; avatar_url: string }> | null = null;
+  private employeeMapCacheAt = 0;
+  private async getEmployeeMap(): Promise<Map<number, { full_name: string; avatar_url: string }>> {
+    if (this.employeeMapCache && Date.now() - this.employeeMapCacheAt < 30_000) {
+      return this.employeeMapCache;
+    }
+    const emps = await this.employeeRepository.find();
+    const map = new Map<number, { full_name: string; avatar_url: string }>();
+    for (const e of emps) {
+      map.set(e.userId, { full_name: e.full_name || 'Unknown', avatar_url: e.avatar_url || '' });
+    }
+    this.employeeMapCache = map;
+    this.employeeMapCacheAt = Date.now();
+    return map;
+  }
+
+  // Cache email map for 30s
+  private emailMapCache: Map<number, string> | null = null;
+  private emailMapCacheAt = 0;
+  private async getEmailMap(): Promise<Map<number, string>> {
+    if (this.emailMapCache && Date.now() - this.emailMapCacheAt < 30_000) {
+      return this.emailMapCache;
+    }
+    const users = await this.userRepo.find({ select: ['id', 'email'] as any });
+    const map = new Map<number, string>();
+    for (const u of users) {
+      map.set(u.id, (u as any).email || '');
+    }
+    this.emailMapCache = map;
+    this.emailMapCacheAt = Date.now();
+    return map;
+  }
+
+  // Helper: batch-load assignee info from employee map
+  private async enrichAssignees(assignees: any[], empMap: Map<number, { full_name: string; avatar_url: string }>) {
+    return assignees.map((a) => ({
+      userId: a.userId,
+      full_name: empMap.get(a.userId)?.full_name || 'Unknown',
+      avatar_url: empMap.get(a.userId)?.avatar_url || '',
+      assignedAt: a.assignedAt,
+      is_main: a.is_main,
+    }));
+  }
 
   async requestPhase(taskId: string, userId: number, targetPhase?: string) {
     const task = await this.getTask(taskId);
@@ -263,7 +307,6 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
     return { task: fullTask, reason };
   }
 
-  
   async revisionCompleted(taskId: string) {
     const task = await this.getTask(taskId);
     if (!task.revision_requested) {
@@ -320,6 +363,7 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
     }
   }
 
+  // Optimized: preload all employees once into map
   async getTask(taskId: string) {
     const taskIdNum = parseInt(taskId, 10);
 
@@ -332,25 +376,24 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
       throw new NotFoundException(`Task ${taskId} not found`);
     }
 
-    const assignees = await this.assigneeRepository.find({ where: { taskId: taskIdNum } as any });
-    const assigneeInfos = await Promise.all(
-      assignees.map(async (a) => {
-        const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } as any });
-        return {
-          userId: a.userId,
-          full_name: emp?.full_name || 'Unknown',
-          avatar_url: emp?.avatar_url || '',
-          assignedAt: a.assignedAt,
-          is_main: a.is_main,
-        };
-      }),
-    );
+    const [assignees, attachments, empMap] = await Promise.all([
+      this.assigneeRepository.find({ where: { taskId: taskIdNum } as any }),
+      this.attachmentRepository.find({ where: { taskId: taskIdNum } as any }),
+      this.getEmployeeMap(),
+    ]);
 
-    const attachments = await this.attachmentRepository.find({ where: { taskId: taskIdNum } as any });
+    const assigneeInfos = assignees.map((a) => ({
+      userId: a.userId,
+      full_name: empMap.get(a.userId)?.full_name || 'Unknown',
+      avatar_url: empMap.get(a.userId)?.avatar_url || '',
+      assignedAt: (a as any).assignedAt,
+      is_main: a.is_main,
+    }));
 
     return { ...task, assignees: assigneeInfos, attachments };
   }
 
+  // Optimized: batch-load all assignees + attachments + employees in 3 queries instead of N+1
   async getProjectTasks(projectId: string) {
     const projectIdNum = parseInt(projectId, 10);
 
@@ -364,27 +407,40 @@ private async autoAllocateKpiOnApproval(task: Task, newStatus: string, oldStatus
       relations: { category: true, project: true } as any,
     });
 
+    if (tasks.length === 0) return [];
 
-    const tasksWithAssignees = await Promise.all(
-      tasks.map(async (task) => {
-        const assignees = await this.assigneeRepository.find({ where: { taskId: task.id } as any });
-        const assigneeInfos = await Promise.all(
-          assignees.map(async (a) => {
-            const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } as any });
-            return {
-              userId: a.userId,
-              full_name: emp?.full_name || 'Unknown',
-              avatar_url: emp?.avatar_url || '',
-              is_main: a.is_main,
-            };
-          }),
-        );
-        const attachments = await this.attachmentRepository.find({ where: { taskId: task.id } as any });
-        return { ...task, assignees: assigneeInfos, attachments };
-      }),
-    );
+    const taskIds = tasks.map(t => t.id);
+    const [allAssignees, allAttachments, empMap] = await Promise.all([
+      this.assigneeRepository.find({ where: { taskId: In(taskIds) } as any }),
+      this.attachmentRepository.find({ where: { taskId: In(taskIds) } as any }),
+      this.getEmployeeMap(),
+    ]);
 
-    return tasksWithAssignees;
+    // Group assignees by taskId
+    const assigneeGroup = new Map<number, any[]>();
+    for (const a of allAssignees) {
+      if (!assigneeGroup.has(a.taskId)) assigneeGroup.set(a.taskId, []);
+      const emp = empMap.get(a.userId);
+      assigneeGroup.get(a.taskId)!.push({
+        userId: a.userId,
+        full_name: emp?.full_name || 'Unknown',
+        avatar_url: emp?.avatar_url || '',
+        is_main: a.is_main,
+      });
+    }
+
+    // Group attachments by taskId
+    const attachmentGroup = new Map<number, any[]>();
+    for (const att of allAttachments) {
+      if (!attachmentGroup.has(att.taskId)) attachmentGroup.set(att.taskId, []);
+      attachmentGroup.get(att.taskId)!.push(att);
+    }
+
+    return tasks.map((task) => ({
+      ...task,
+      assignees: assigneeGroup.get(task.id) ?? [],
+      attachments: attachmentGroup.get(task.id) ?? [],
+    }));
   }
 
   async updateTask(
@@ -567,7 +623,6 @@ async moveTask(
     }
   }
 
-
   async assignTask(taskId: string, userId: number, isMain: boolean = false) {
     const taskIdNum = Number(taskId);
 
@@ -592,7 +647,6 @@ async moveTask(
     return saved;
   }
 
-
   async unassignTask(taskId: string, userId: number) {
     const assignee = await this.assigneeRepository.findOne({ where: { taskId: Number(taskId), userId } as any });
     if (assignee) {
@@ -601,7 +655,7 @@ async moveTask(
     return { success: true };
   }
 
-
+  // Optimized: batch save kpi allocations
   async allocateKpi(
     taskId: string,
     supporterAllocations: { userId: number; points: number }[],
@@ -635,33 +689,35 @@ async moveTask(
         [taskIdNum, phase],
       );
 
-      const savedAllocs: TaskKpiAllocation[] = [];
+      // Batch create all allocation entities
+      const allocEntities: TaskKpiAllocation[] = [];
 
       for (const alloc of supporterAllocations) {
         if (alloc.points <= 0) continue;
-        const e = this.kpiAllocRepo.create({
+        allocEntities.push(this.kpiAllocRepo.create({
           taskId: taskIdNum,
           userId: alloc.userId,
           phase,
           points: alloc.points,
           is_main: false,
-        } as any);
-        savedAllocs.push(await this.kpiAllocRepo.save(e) as unknown as TaskKpiAllocation);
+        } as any) as unknown as TaskKpiAllocation);
       }
 
       if (main && mainPoints > 0) {
-        const e = this.kpiAllocRepo.create({
+        allocEntities.push(this.kpiAllocRepo.create({
           taskId: taskIdNum,
           userId: main.userId,
           phase,
           points: mainPoints,
           is_main: true,
-        } as any);
-        savedAllocs.push(await this.kpiAllocRepo.save(e) as unknown as TaskKpiAllocation);
+        } as any) as unknown as TaskKpiAllocation);
       }
 
+      // Batch save all at once
+      const savedAllocs = await this.kpiAllocRepo.save(allocEntities);
+
       if (savedAllocs.length > 0) {
-        await this.writeKpiRecords(taskIdNum, phase, savedAllocs, productTypeId);
+        await this.writeKpiRecords(taskIdNum, phase, savedAllocs as unknown as TaskKpiAllocation[], productTypeId);
       }
 
       return { phase, totalPoints, mainPoints, supporterAllocs: supporterAllocations };
@@ -671,17 +727,19 @@ async moveTask(
     }
   }
 
+  // Optimized: batch-load employee + project in one shot
   private async fireTaskCompletedNotif(task: Task) {
     try {
+      const [empMap, project] = await Promise.all([
+        this.getEmployeeMap(),
+        this.taskRepository.manager.connection.query(
+          'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
+        ),
+      ]);
+      const projectName = project[0]?.projectName || `Project #${task.project_id}`;
       const assignees = await this.assigneeRepository.find({ where: { taskId: Number(task.id) } } as any);
       const main = assignees.find((a: any) => a.is_main);
-      const mainName = main ? await this.employeeRepository.findOne({ where: { userId: main.userId } } as any) : null;
-      const employeeName = (mainName as any)?.full_name || 'Unknown';
-      const projectId = task.project_id;
-      const project = await this.taskRepository.manager.connection.query(
-        'SELECT "projectName" FROM projects WHERE id = $1', [projectId],
-      );
-      const projectName = project[0]?.projectName || `Project #${projectId}`;
+      const employeeName = main ? (empMap.get(main.userId)?.full_name || 'Unknown') : 'Unknown';
 
       await this.notificationTriggers.taskCompleted(
         task.title || `Task #${task.id}`,
@@ -693,80 +751,83 @@ async moveTask(
     }
   }
 
+  // Optimized: batch-load employee + email from cache
   private async fireNewTaskAssignedNotif(taskId: number, userId: number) {
     try {
-      const task = await this.taskRepository.findOne({ where: { id: taskId } } as any);
+      const [task, empMap, emailMap] = await Promise.all([
+        this.taskRepository.findOne({ where: { id: taskId } } as any),
+        this.getEmployeeMap(),
+        this.getEmailMap(),
+      ]);
       if (!task) return;
+
       const project = await this.taskRepository.manager.connection.query(
         'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
       );
       const projectName = project[0]?.projectName || `Project #${task.project_id}`;
-      const emp = await this.employeeRepository.findOne({ where: { userId } } as any);
-      const email = await this.taskRepository.manager.connection.query(
-        'SELECT email FROM users WHERE id = $1', [userId],
-      );
+
       await this.notificationTriggers.newTaskAssigned(
         task.title || `Task #${task.id}`,
         projectName,
-        task.due_date ? new Date(task.due_date).toLocaleDateString('vi-VN') : 'Kh�ng c�',
-        task.priority || 'Trung b�nh',
+        task.due_date ? new Date(task.due_date).toLocaleDateString('vi-VN') : 'Không có',
+        task.priority || 'Trung bình',
         userId,
-        email[0]?.email || undefined,
+        emailMap.get(userId) || undefined,
       );
     } catch (err) {
       this.logger.error(`[NOTIF] fireNewTaskAssignedNotif error: ${(err as any).message}`);
     }
   }
 
+  // Optimized: batch-load employee + email info before loop
   private async fireRevisionRequestedNotif(taskId: string, reason: string) {
     try {
-      const task = await this.getTask(taskId);
+      const [task, empMap, emailMap] = await Promise.all([
+        this.getTask(taskId),
+        this.getEmployeeMap(),
+        this.getEmailMap(),
+      ]);
       const assignees = await this.assigneeRepository.find({ where: { taskId: Number(taskId) } } as any);
-      for (const a of assignees) {
-        const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } } as any);
-        const email = await this.taskRepository.manager.connection.query(
-          'SELECT email FROM users WHERE id = $1', [a.userId],
-        );
+
+      // Fire notifications concurrently
+      await Promise.all(assignees.map(async (a: any) => {
         await this.notificationTriggers.taskRevisionRequested(
           task.title || `Task #${task.id}`,
           'Admin',
           reason,
           a.userId,
-          email[0]?.email || undefined,
+          emailMap.get(a.userId) || undefined,
         );
-      }
+      }));
     } catch (err) {
       this.logger.error(`[NOTIF] fireRevisionRequestedNotif error: ${(err as any).message}`);
     }
   }
 
+  // Optimized: batch INSERT instead of N inserts
   private async writeKpiRecords(
     taskId: number,
     phase: string,
     allocations: TaskKpiAllocation[],
     productTypeId: number,
   ) {
-    const dataSource = this.taskRepository.manager.connection;
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
+    const achievedDate = now.toISOString().split('T')[0];
 
     const userIds = new Set<number>();
 
-    for (const alloc of allocations) {
-      await dataSource.query(
-        `INSERT INTO employee_kpis (user_id, task_id, product_type_id, phase, points, achieved_date)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          alloc.userId,
-          taskId,
-          productTypeId || 1,
-          phase,
-          alloc.points,
-          new Date().toISOString().split('T')[0],
-        ],
+    if (allocations.length > 0) {
+      // Build batch INSERT with multiple value tuples
+      const values = allocations.map((alloc) => {
+        userIds.add(alloc.userId);
+        return `(${alloc.userId}, ${taskId}, ${productTypeId || 1}, '${phase}', ${alloc.points}, '${achievedDate}')`;
+      });
+
+      await this.taskRepository.manager.connection.query(
+        `INSERT INTO employee_kpis (user_id, task_id, product_type_id, phase, points, achieved_date) VALUES ${values.join(', ')}`
       );
-      userIds.add(alloc.userId);
     }
 
     for (const uid of userIds) {
@@ -831,35 +892,51 @@ async moveTask(
     return this.employeeRepository.find({});
   }
 
+  // Optimized: batch-load all assignees + employees + categories in 3 queries instead of N+1
   async getAllTasks() {
     const tasks = await this.taskRepository.find({
       order: { createdAt: 'DESC' } as any,
     });
 
-    const tasksWithAssignees = await Promise.all(
-      tasks.map(async (task) => {
-        const assignees = await this.assigneeRepository.find({ where: { taskId: task.id } as any });
-        const assigneeInfos = await Promise.all(
-          assignees.map(async (a) => {
-            const emp = await this.employeeRepository.findOne({ where: { userId: a.userId } as any });
-            return {
-              userId: a.userId,
-              full_name: emp?.full_name || 'Unknown',
-              avatar_url: emp?.avatar_url || '',
-              is_main: a.is_main,
-            };
-          }),
-        );
-        let categoryName: string | undefined;
-        if (task.category_id) {
-          const cat = await this.categoryRepository.findOne({ where: { id: task.category_id } as any });
-          categoryName = cat?.tittle;
-        }
-        return { ...task, assignees: assigneeInfos, category: categoryName ? { tittle: categoryName } : undefined };
-      }),
-    );
+    if (tasks.length === 0) return [];
 
-    return tasksWithAssignees;
+    const taskIds = tasks.map(t => t.id);
+    const categoryIds = tasks.filter(t => t.category_id).map(t => t.category_id);
+
+    const [allAssignees, empMap, categories] = await Promise.all([
+      this.assigneeRepository.find({ where: { taskId: In(taskIds) } as any }),
+      this.getEmployeeMap(),
+      categoryIds.length > 0
+        ? this.categoryRepository.find({ where: { id: In(categoryIds) } as any })
+        : Promise.resolve([]),
+    ]);
+
+    const categoryMap = new Map<number, any>();
+    for (const cat of categories) {
+      categoryMap.set(cat.id, cat);
+    }
+
+    // Group assignees by taskId
+    const assigneeGroup = new Map<number, any[]>();
+    for (const a of allAssignees) {
+      if (!assigneeGroup.has(a.taskId)) assigneeGroup.set(a.taskId, []);
+      const emp = empMap.get(a.userId);
+      assigneeGroup.get(a.taskId)!.push({
+        userId: a.userId,
+        full_name: emp?.full_name || 'Unknown',
+        avatar_url: emp?.avatar_url || '',
+        is_main: a.is_main,
+      });
+    }
+
+    return tasks.map((task) => {
+      const cat = task.category_id ? categoryMap.get(task.category_id) : undefined;
+      return {
+        ...task,
+        assignees: assigneeGroup.get(task.id) ?? [],
+        category: cat ? { tittle: cat.tittle } : undefined,
+      };
+    });
   }
 
   async createCategory(ctg: CreateCategoryDto) {
@@ -870,33 +947,32 @@ async moveTask(
     return this.categoryRepository.find({});
   }
 
+  // Optimized: batch-load user info before loop
   private async fireTaskBecameUrgentNotif(task: Task) {
     try {
-      const assignees = await this.assigneeRepository.find({ where: { taskId: Number(task.id) } as any });
-      const project = await this.taskRepository.manager.connection.query(
-        'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
-      );
+      const [assignees, project, emailMap, empMap] = await Promise.all([
+        this.assigneeRepository.find({ where: { taskId: Number(task.id) } } as any),
+        this.taskRepository.manager.connection.query(
+          'SELECT "projectName" FROM projects WHERE id = $1', [task.project_id],
+        ),
+        this.getEmailMap(),
+        this.getEmployeeMap(),
+      ]);
       const projectName = project[0]?.projectName || `Project #${task.project_id}`;
 
-      for (const assignee of assignees) {
-        const user = await this.userRepo.findOne({ where: { id: assignee.userId }});
-        if (user) {
+      await Promise.all(assignees.map(async (assignee: any) => {
+        const email = emailMap.get(assignee.userId);
+        if (email) {
           await this.notificationTriggers.taskBecameUrgent(
             task.title || `Task #${task.id}`,
             projectName,
             assignee.userId,
-            user.email,
+            email,
           );
         }
-      }
+      }));
     } catch (err) {
       this.logger.error(`[NOTIF] fireTaskBecameUrgentNotif error: ${(err as any).message}`);
     }
   }
 }
-
-
-
-
-
-

@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, Between, Raw } from 'typeorm';
 import { AttendanceRecord } from './entities/attendance-records.entity';
 import { User } from '../users/entities/user.entity';
 import { Employee } from '../employee/entities/emplyee.entity';
@@ -47,7 +47,6 @@ export class AttendanceService {
       this.logger.error(`[NOTIF] lateCheckIn error: ${(err as any).message}`);
     }
   }
-
 
   private todayString(): string {
     const d = this.localNow();
@@ -94,7 +93,6 @@ export class AttendanceService {
     if (lateMinutes > 0) return 'm';
     return 'x';
   }
-
 
   async checkIn(userId: number, projectId: string, dto: CreateCheckInDto) {
     const today = this.todayString();
@@ -154,12 +152,10 @@ export class AttendanceService {
       this.fireLateCheckInNotif(userId, dto.notes).catch(e => this.logger.error(`[NOTIF] ${e.message}`));
     }
 
-    // Update employee employment_status on check-in
     this.employeeRepo.update({ userId }, { employment_status: true } as any).catch(e => this.logger.error(`[empStatus] ${e.message}`));
 
     return saved;
   }
-
 
   async checkOut(userId: number, projectId: string, dto: CreateCheckOutDto) {
     const today = this.todayString();
@@ -210,12 +206,10 @@ export class AttendanceService {
       `[CHECKOUT] User ${userId} at ${now.toISOString()} — worked ${record.workingMinutes}min`,
     );
 
-    // Update employee employment_status on check-out
     this.employeeRepo.update({ userId }, { employment_status: false } as any).catch(e => this.logger.error(`[empStatus] ${e.message}`));
 
     return saved;
   }
-
 
   async getMyHistory(userId: number, limit = 30) {
     const records = await this.attendanceRepo.find({
@@ -227,7 +221,7 @@ export class AttendanceService {
     return records;
   }
 
-
+  // Optimized: query only current month instead of all records
   async getMyStats(userId: number) {
     const today = this.todayString();
     const currentDate = this.localNow();
@@ -235,21 +229,24 @@ export class AttendanceService {
     const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const monthPrefix = `${year}-${month}`;
 
-    const records = await this.attendanceRepo.find({
-      where: { userId } as any,
-    }) as unknown as AttendanceRecord[];
+    // Query only current month records
+    const [allRecords, todayRecord] = await Promise.all([
+      this.attendanceRepo.find({
+        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${monthPrefix}%'`) } as any,
+      }) as unknown as AttendanceRecord[],
+      this.attendanceRepo.findOne({
+        where: { userId, attendanceDate: today } as any,
+      }) as unknown as AttendanceRecord | null,
+    ]);
 
-    const todayRecord = records.find((r) => r.attendanceDate === today);
-
-    const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthPrefix));
-    const totalWorkDays = monthRecords.length;
-    const lateDays = monthRecords.filter((r) => r.status === 'm').length;
-    const absentDays = monthRecords.filter((r) => r.status === 'kl' || r.status === 'o').length;
-    const totalOtMinutes = monthRecords.reduce(
+    const totalWorkDays = allRecords.length;
+    const lateDays = allRecords.filter((r) => r.status === 'm').length;
+    const absentDays = allRecords.filter((r) => r.status === 'kl' || r.status === 'o').length;
+    const totalOtMinutes = allRecords.reduce(
       (sum, r) => sum + Math.max(0, (r.workingMinutes || 0) - WORKDAY_MINUTES),
       0,
     );
-    const totalWorkingMinutes = monthRecords.reduce(
+    const totalWorkingMinutes = allRecords.reduce(
       (sum, r) => sum + (r.workingMinutes || 0),
       0,
     );
@@ -275,53 +272,69 @@ export class AttendanceService {
     };
   }
 
+  // Optimized: single query per month instead of 3 full table scans
   private async getLateTrend(userId: number) {
     const now = this.localNow();
     const results: { month: string; count: number }[] = [];
 
+    const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+
     for (let i = 2; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const prefix = `${year}-${month}`;
+      const suffix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
+      // Query only records for this specific month
       const records = await this.attendanceRepo.find({
-        where: { userId } as any,
+        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${suffix}%'`) } as any,
       }) as unknown as AttendanceRecord[];
 
-      const count = records.filter(
-        (r) => r.attendanceDate.startsWith(prefix) && r.status === 'm',
-      ).length;
-
-      const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-        'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+      const count = records.filter((r) => r.status === 'm').length;
       results.push({ month: monthNames[d.getMonth()], count });
     }
 
     return results;
   }
 
-
+  // Optimized: filter at DB level instead of fetching all
   async getMonthGrid(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-    const employees = await this.employeeRepo
-      .createQueryBuilder('employee')
-      .leftJoinAndSelect('employee.user', 'user')
-      .where('user.role = :role', { role: 'employee' })
-      .getMany() as unknown as Employee[];
-    const records = await this.attendanceRepo.find({}) as unknown as AttendanceRecord[];
-    const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthStr));
+    const [employees, monthRecords] = await Promise.all([
+      this.employeeRepo
+        .createQueryBuilder('employee')
+        .leftJoinAndSelect('employee.user', 'user')
+        .where('user.role = :role', { role: 'employee' })
+        .getMany() as unknown as Employee[],
+      // Query only matching month records
+      this.attendanceRepo.find({
+        where: { attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
+      }) as unknown as AttendanceRecord[],
+    ]);
 
     const daysInMonth = new Date(year, month, 0).getDate();
+
+    // Build lookup map: userId -> attendance records
+    const recordsByUser = new Map<number, AttendanceRecord[]>();
+    for (const r of monthRecords) {
+      if (!recordsByUser.has(r.userId)) recordsByUser.set(r.userId, []);
+      recordsByUser.get(r.userId)!.push(r);
+    }
+
     const grid = employees.map((emp) => {
-      const userRecords = monthRecords.filter((r) => r.userId === emp.userId);
+      const userRecords = recordsByUser.get(emp.userId) ?? [];
+
+      // Build date lookup within user records
+      const recordByDate = new Map<string, AttendanceRecord>();
+      for (const r of userRecords) {
+        recordByDate.set(r.attendanceDate, r);
+      }
 
       const days: Record<number, { status: string; checkIn?: string; checkOut?: string }> = {};
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${monthStr}-${String(d).padStart(2, '0')}`;
         const dayOfWeek = new Date(year, month - 1, d).getDay();
-        const record = userRecords.find((r) => r.attendanceDate === dateStr);
+        const record = recordByDate.get(dateStr);
 
         if (record) {
           days[d] = {
@@ -354,20 +367,30 @@ export class AttendanceService {
     };
   }
 
-
+  // Optimized: filter at DB level instead of fetching all
   async getMonthlySummary(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-    const employees = await this.employeeRepo
-      .createQueryBuilder('employee')
-      .leftJoinAndSelect('employee.user', 'user')
-      .where('user.role = :role', { role: 'employee' })
-      .getMany() as unknown as Employee[];
-    const records = await this.attendanceRepo.find({}) as unknown as AttendanceRecord[];
-    const monthRecords = records.filter((r) => r.attendanceDate.startsWith(monthStr));
+    const [employees, monthRecords] = await Promise.all([
+      this.employeeRepo
+        .createQueryBuilder('employee')
+        .leftJoinAndSelect('employee.user', 'user')
+        .where('user.role = :role', { role: 'employee' })
+        .getMany() as unknown as Employee[],
+      this.attendanceRepo.find({
+        where: { attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
+      }) as unknown as AttendanceRecord[],
+    ]);
+
+    // Group by userId
+    const recordsByUser = new Map<number, AttendanceRecord[]>();
+    for (const r of monthRecords) {
+      if (!recordsByUser.has(r.userId)) recordsByUser.set(r.userId, []);
+      recordsByUser.get(r.userId)!.push(r);
+    }
 
     const summary = employees.map((emp) => {
-      const userRecords = monthRecords.filter((r) => r.userId === emp.userId);
+      const userRecords = recordsByUser.get(emp.userId) ?? [];
       const totalDays = userRecords.length;
       const lateDays = userRecords.filter((r) => r.status === 'm').length;
       const unpaidDays = userRecords.filter((r) => r.status === 'kl').length;
@@ -409,38 +432,40 @@ export class AttendanceService {
     };
   }
 
-
+  // Optimized: batch-load employees
   async getByDate(dateStr: string) {
     const records = await this.attendanceRepo.find({
       where: { attendanceDate: dateStr } as any,
       order: { checkIn: 'ASC' } as any,
     }) as unknown as AttendanceRecord[];
 
-    const enriched = await Promise.all(
-      records.map(async (r) => {
-        const emp = await this.employeeRepo.findOne({
-          where: { userId: r.userId } as any,
-        }) as unknown as Employee | null;
-        return {
-          ...r,
-          employeeName: emp?.full_name || 'Unknown',
-          employeeAvatar: emp?.avatar_url || '',
-        };
-      }),
-    );
+    if (records.length === 0) return [];
 
-    return enriched;
+    // Batch-load all employees at once
+    const userIds = [...new Set(records.map(r => r.userId))];
+    const employees = await this.employeeRepo.find({
+      where: { userId: In(userIds) } as any,
+    }) as unknown as Employee[];
+    const empMap = new Map(employees.map(e => [e.userId, e]));
+
+    return records.map((r) => {
+      const emp = empMap.get(r.userId);
+      return {
+        ...r,
+        employeeName: emp?.full_name || 'Unknown',
+        employeeAvatar: emp?.avatar_url || '',
+      };
+    });
   }
 
-
+  // Optimized: filter at DB level
   async getUserRecords(userId: number, year?: number, month?: number) {
     if (year && month) {
       const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-      const records = await this.attendanceRepo.find({
-        where: { userId } as any,
+      return this.attendanceRepo.find({
+        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
         order: { attendanceDate: 'DESC' } as any,
       }) as unknown as AttendanceRecord[];
-      return records.filter((r) => r.attendanceDate.startsWith(monthStr));
     }
 
     return this.attendanceRepo.find({
@@ -448,7 +473,6 @@ export class AttendanceService {
       order: { attendanceDate: 'DESC' } as any,
     }) as unknown as AttendanceRecord[];
   }
-
 
   async approveRecord(recordId: number, adminUserId: number, dto: ApproveAttendanceDto) {
     const record = await this.attendanceRepo.findOne({
@@ -470,4 +494,3 @@ export class AttendanceService {
     return saved;
   }
 }
-

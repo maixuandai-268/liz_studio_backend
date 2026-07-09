@@ -60,15 +60,22 @@ export class NotificationTriggersService {
     message: string,
     emailTitle?: string,
   ) {
-    for (const item of items) {
-      await this.create({
+    // Batch save all notifications first, then emit concurrently
+    const notifs = this.notifRepo.create(
+      items.map(item => ({
         userId: item.userId,
         type,
         message,
-        email: item.email,
-        emailTitle,
-      });
-    }
+      }))
+    );
+    const saved = await this.notifRepo.save(notifs);
+
+    await Promise.all(items.map((item, i) => {
+      this.realtimeService.emitNotification(String(item.userId), saved[i]);
+      if (item.email && emailTitle) {
+        return this.mailService.sendNotification(item.email, emailTitle, message).catch(() => {});
+      }
+    }));
   }
 
 
@@ -223,21 +230,28 @@ export class NotificationTriggersService {
 
   private async createForAdmin(type: NotificationType, message: string, title: string) {
     try {
-      this.logger.log(`[NOTIF] createForAdmin: ${title} - fetching admin users...`);
       const adminUsers = await this.notifRepo.manager.connection.query(
         `SELECT u.id, u.email FROM users u WHERE u.role = 'admin'`,
       );
-      this.logger.log(`[NOTIF] createForAdmin: Found ${adminUsers.length} admins.`);
-      for (const admin of adminUsers) {
-        this.logger.log(`[NOTIF] createForAdmin: Admin ${admin.id} (${admin.email})`);
-        await this.create({
+      if (adminUsers.length === 0) return;
+
+      // Batch save all admin notifications
+      const notifs = this.notifRepo.create(
+        adminUsers.map((admin: any) => ({
           userId: Number(admin.id),
           type,
           message,
-          email: admin.email || undefined,
-          emailTitle: title,
-        });
-      }
+        }))
+      );
+      const saved = await this.notifRepo.save(notifs);
+
+      // Emit + email concurrently
+      await Promise.all(adminUsers.map((admin: any, i: number) => {
+        this.realtimeService.emitNotification(String(admin.id), saved[i]);
+        if (admin.email) {
+          return this.mailService.sendNotification(admin.email, title, message).catch(() => {});
+        }
+      }));
     } catch (err) {
       this.logger.error(`[NOTIF] createForAdmin failed: ${(err as any).message}`);
     }

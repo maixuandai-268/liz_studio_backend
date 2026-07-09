@@ -31,7 +31,7 @@ export class KpiService {
   async createProductType(dto: CreateProductTypeDto): Promise<KpiProductType> {
     const item = this.productTypeRepo.create(dto);
     const saved = await this.productTypeRepo.save(item);
-    this.logger.log(`[CREATE] Product type "${saved.name}" — base: ${saved.basePoints}`);
+    this.logger.log(`[CREATE] Product type "${saved.name}" ï¿½ base: ${saved.basePoints}`);
     return saved;
   }
 
@@ -41,7 +41,7 @@ export class KpiService {
 
     Object.assign(item, dto);
     const saved = await this.productTypeRepo.save(item);
-    this.logger.log(`[UPDATE] Product type ${id} — base: ${saved.basePoints}`);
+    this.logger.log(`[UPDATE] Product type ${id} ï¿½ base: ${saved.basePoints}`);
     return saved;
   }
 
@@ -124,9 +124,9 @@ export class KpiService {
       }
     }
 
-    for (const row of userIds) {
-      await this.updateMonthlySummary(Number(row.user_id), year, month);
-    }
+    await Promise.all(
+      userIds.map((row: any) => this.updateMonthlySummary(Number(row.user_id), year, month))
+    );
 
     this.logger.log(`[SUMMARY] Summarized ${userIds.length} users for ${year}-${month}`);
     return { users: userIds.length, year, month };

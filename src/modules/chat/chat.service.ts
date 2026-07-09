@@ -31,35 +31,34 @@ export class ChatService {
 
   private async fireChatNotif(roomId: number, senderId: number, content: string) {
     try {
-      const room = await this.chatRoomRepository.findOne({ where: { id: roomId } });
-      const participants = await this.participantRepository.find({ where: { roomId } });
-      const sender = await this.userRepo.findOne({ where: { id: senderId }, relations: { employee: true } });
+      const [room, participants, sender] = await Promise.all([
+        this.chatRoomRepository.findOne({ where: { id: roomId } }),
+        this.participantRepository.find({ where: { roomId } }),
+        this.userRepo.findOne({ where: { id: senderId }, relations: { employee: true } }),
+      ]);
       const senderName = sender?.employee?.full_name || 'Unknown';
       const groupName = room?.name || `Room #${roomId}`;
 
-      for (const p of participants) {
-        if (p.userId === senderId) continue;
-        const targetUser = await this.userRepo.findOne({ where: { id: p.userId } });
-        if (targetUser) {
+      const targetUserIds = participants.filter(p => p.userId !== senderId).map(p => p.userId);
+      if (targetUserIds.length === 0) return;
+
+      // Batch-load all target users
+      const targetUsers = await this.userRepo.find({ where: { id: In(targetUserIds) } });
+      const userMap = new Map(targetUsers.map((u: any) => [u.id, u]));
+
+      await Promise.all(participants
+        .filter(p => p.userId !== senderId)
+        .map(async (p) => {
+          const targetUser = userMap.get(p.userId);
+          if (!targetUser) return;
           if (room?.isGroup && targetUser.email) {
             await this.notificationTriggers.chatMessageGroup(
-              senderName,
-              groupName,
-              content,
-              p.userId,
-              targetUser.email,
+              senderName, groupName, content, p.userId, targetUser.email,
             );
           } else if (!room?.isGroup) {
-            await this.notificationTriggers.chatMessage(
-              senderName,
-              content,
-              p.userId,
-            );
-          } else {
-            this.logger.warn(`[NOTIF-CHAT-WARN] User ${p.userId} has no email, skipping group notification`);
+            await this.notificationTriggers.chatMessage(senderName, content, p.userId);
           }
-        }
-      }
+        }));
     } catch (err) {
       this.logger.error(`[NOTIF-CHAT-ERR] ${(err as any).message}`);
     }
@@ -127,22 +126,24 @@ export class ChatService {
 
 
   async findOrCreateDM(userId1: number, userId2: number) {
-    const rooms = await this.chatRoomRepository
-      .createQueryBuilder('room')
-      .innerJoin('room.participants', 'p')
-      .where('room.is_group = false')
-      .groupBy('room.id')
-      .getMany();
+    // Direct query: find rooms where both users are participants
+    const roomIds1 = (await this.participantRepository.find({
+      where: { userId: userId1 },
+      select: ['roomId'] as any,
+    })).map((p: any) => p.roomId);
 
-    for (const room of rooms) {
-      const participants = await this.participantRepository.find({
-        where: { roomId: room.id },
-      });
-      if (participants.length !== 2) continue;
-      const uids = participants.map((p) => p.userId).sort((a, b) => a - b);
-      const query = [userId1, userId2].sort((a, b) => a - b);
-      if (uids[0] === query[0] && uids[1] === query[1]) {
-        return room;
+    if (roomIds1.length > 0) {
+      const roomIds2 = (await this.participantRepository.find({
+        where: { userId: userId2, roomId: In(roomIds1) },
+        select: ['roomId'] as any,
+      })).map((p: any) => p.roomId);
+
+      for (const roomId of roomIds2) {
+        const count = await this.participantRepository.count({ where: { roomId } });
+        if (count === 2) {
+          const room = await this.chatRoomRepository.findOne({ where: { id: roomId, isGroup: false } });
+          if (room) return room;
+        }
       }
     }
 
@@ -192,36 +193,49 @@ export class ChatService {
     if (participations.length === 0) return [];
 
     const roomIds = participations.map((p) => p.roomId);
-    const rooms = await this.chatRoomRepository.find({
-      where: { id: In(roomIds) },
-      order: { createdAt: 'DESC' },
-    });
-
-    const enriched = await Promise.all(
-      rooms.map(async (room) => {
-        const participants = await this.participantRepository.find({
-          where: { roomId: room.id },
-        });
-        const lastMessage = await this.messageRepository.findOne({
-          where: { roomId: room.id } as any,
-          order: { createdAt: 'DESC' } as any,
-        });
-        return {
-          id: room.id,
-          name: room.name,
-          projectId: room.projectId,
-          isGroup: room.isGroup,
-          createdBy: room.createdBy,
-          createdAt: room.createdAt,
-          participantIds: participants.map((p) => p.userId),
-          lastMessage: lastMessage
-            ? { content: lastMessage.content, userId: lastMessage.userId, createdAt: lastMessage.createdAt }
-            : null,
-        };
+    const [rooms, allParticipants, lastMessages] = await Promise.all([
+      this.chatRoomRepository.find({
+        where: { id: In(roomIds) },
+        order: { createdAt: 'DESC' },
       }),
-    );
+      this.participantRepository.find({ where: { roomId: In(roomIds) } }),
+      // Get last message per room using raw query or subquery
+      Promise.all(roomIds.map(roomId =>
+        this.messageRepository.findOne({
+          where: { roomId } as any,
+          order: { createdAt: 'DESC' } as any,
+        })
+      )),
+    ]);
 
-    return enriched;
+    // Group participants by room
+    const participantsByRoom = new Map<number, number[]>();
+    for (const p of allParticipants) {
+      if (!participantsByRoom.has(p.roomId)) participantsByRoom.set(p.roomId, []);
+      participantsByRoom.get(p.roomId)!.push(p.userId);
+    }
+
+    // Map last messages
+    const lastMsgByRoom = new Map<number, any>();
+    for (const msg of lastMessages) {
+      if (msg) lastMsgByRoom.set(msg.roomId, msg);
+    }
+
+    return rooms.map((room) => {
+      const lastMsg = lastMsgByRoom.get(room.id);
+      return {
+        id: room.id,
+        name: room.name,
+        projectId: room.projectId,
+        isGroup: room.isGroup,
+        createdBy: room.createdBy,
+        createdAt: room.createdAt,
+        participantIds: participantsByRoom.get(room.id) ?? [],
+        lastMessage: lastMsg
+          ? { content: lastMsg.content, userId: lastMsg.userId, createdAt: lastMsg.createdAt }
+          : null,
+      };
+    });
   }
 
 
@@ -251,7 +265,7 @@ export class ChatService {
   }
 
 
-  async getRoomMessagesById(roomId: number) {
+  async getRoomMessagesById(roomId: number, limit = 100) {
     const messages = await this.messageRepository.find({
         where: { roomId },
         relations: {
@@ -262,6 +276,7 @@ export class ChatService {
         order: {
             createdAt: "ASC",
         },
+        take: limit,
     })
 
     return messages.map(message => ({
