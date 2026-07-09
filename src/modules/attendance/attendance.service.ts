@@ -235,7 +235,7 @@ export class AttendanceService {
     // Query only current month records
     const [allRecords, todayRecord] = await Promise.all([
       this.attendanceRepo.find({
-        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${monthPrefix}%'`) } as any,
+        where: { userId, attendanceDate: Between(`${monthPrefix}-01`, `${monthPrefix}-31`) } as any,
       }) as unknown as AttendanceRecord[],
       this.attendanceRepo.findOne({
         where: { userId, attendanceDate: today } as any,
@@ -287,9 +287,8 @@ export class AttendanceService {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const suffix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-      // Query only records for this specific month
       const records = await this.attendanceRepo.find({
-        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${suffix}%'`) } as any,
+        where: { userId, attendanceDate: Between(`${suffix}-01`, `${suffix}-31`) } as any,
       }) as unknown as AttendanceRecord[];
 
       const count = records.filter((r) => r.status === 'm').length;
@@ -309,9 +308,8 @@ export class AttendanceService {
         .leftJoinAndSelect('employee.user', 'user')
         .where('user.role = :role', { role: 'employee' })
         .getMany() as unknown as Employee[],
-      // Query only matching month records
       this.attendanceRepo.find({
-        where: { attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
+        where: { attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
       }) as unknown as AttendanceRecord[],
     ]);
 
@@ -381,7 +379,7 @@ export class AttendanceService {
         .where('user.role = :role', { role: 'employee' })
         .getMany() as unknown as Employee[],
       this.attendanceRepo.find({
-        where: { attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
+        where: { attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
       }) as unknown as AttendanceRecord[],
     ]);
 
@@ -466,7 +464,7 @@ export class AttendanceService {
     if (year && month) {
       const monthStr = `${year}-${String(month).padStart(2, '0')}`;
       return this.attendanceRepo.find({
-        where: { userId, attendanceDate: Raw((alias) => `${alias} LIKE '${monthStr}%'`) } as any,
+        where: { userId, attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
         order: { attendanceDate: 'DESC' } as any,
       }) as unknown as AttendanceRecord[];
     }
