@@ -6,7 +6,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Projects } from './entities/project.entity';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { Task_Categories } from '../tasks/entities/categories.entity';
@@ -53,11 +53,13 @@ export class ProjectService {
   }),
 );
 
-for (const view of dto.views) {
-  const category = await this.categoriesRepo.findOne({
-    where: { id: view.categoryId },
-  });
+// Preload all categories once, avoid N+1 per view
+const categoryIds = dto.views.map(v => v.categoryId);
+const allCategories = await this.categoriesRepo.find({ where: { id: In(categoryIds) } });
+const categoryMap = new Map(allCategories.map(c => [c.id, c]));
 
+for (const view of dto.views) {
+  const category = categoryMap.get(view.categoryId);
   if (!category) continue;
 
   const tasks = Array.from(
