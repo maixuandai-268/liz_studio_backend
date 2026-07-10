@@ -36,7 +36,7 @@ export class SalaryService {
     if (this.empNameCache && Date.now() - this.empNameCacheAt < 30_000) return this.empNameCache;
     const [emps, users] = await Promise.all([
       this.employeeRepo.find() as unknown as Employee[],
-      this.userRepo.find({ select: ['id', 'email'] as any }),
+      this.userRepo.find({ select: { id: true, email: true } }),
     ]);
     const emailMap = new Map(users.map((u: any) => [u.id, u.email || '']));
     const map = new Map<number, { name: string; email?: string }>();

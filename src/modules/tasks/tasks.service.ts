@@ -68,7 +68,7 @@ export class TasksService {
     if (this.emailMapCache && Date.now() - this.emailMapCacheAt < 30_000) {
       return this.emailMapCache;
     }
-    const users = await this.userRepo.find({ select: ['id', 'email'] as any });
+    const users = await this.userRepo.find({ select: { id: true, email: true } });
     const map = new Map<number, string>();
     for (const u of users) {
       map.set(u.id, (u as any).email || '');

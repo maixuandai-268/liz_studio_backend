@@ -89,7 +89,8 @@ export class AuthService {
       });
       const user = await this.usersService.findById(payload.sub);
       if (!user) throw new UnauthorizedException('User not found');
-      if (user.refresh_token !== refreshToken) throw new UnauthorizedException('Invalid refresh token');
+      const isMatch = await bcrypt.compare(refreshToken, user.refresh_token);
+      if (!isMatch) throw new UnauthorizedException('Invalid refresh token');
 
       const newPayload = { sub: user.id, code: user.employee_code, role: user.role };
       const accessToken = this.jwtService.sign(newPayload, { expiresIn: '15m' });

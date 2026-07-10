@@ -74,6 +74,10 @@ export class ChatService {
     try {
       const userIdNum = parseInt(userId, 10) || 0;
 
+      // Channel name → hardcoded ID (khớp với initializeDefaultChannels)
+      const CHANNEL_IDS: Record<string, number> = { 'chung': 1, 'công-việc': 2, 'thông-báo': 3 };
+      const channelId = CHANNEL_IDS[projectId];
+
       let room = await this.chatRoomRepository.findOne({
         where: { name: `Project ${projectId}` } as any,
       });
@@ -88,6 +92,7 @@ export class ChatService {
       const messageCreate = this.messageRepository.create({
         userId: userIdNum,
         roomId: room.id,
+        channelId,
         content,
         type: 'TEXT',
       } as any);
@@ -97,13 +102,14 @@ export class ChatService {
       this.realtimeService.emitChatMessage(projectId, {
         id: saved.id,
         channel: projectId,
+        channelId,
         userId: userIdNum,
         userName,
         content: saved.content,
         createdAt: saved.createdAt,
       });
 
-      this.logger.log(`[CHAT] Message sent by ${userName} in project ${projectId}`);
+      this.logger.log(`[CHAT] Message sent by ${userName} in project ${projectId} (channelId=${channelId})`);
       return saved;
     } catch (error) {
       this.logger.error(`[CHAT] Send message failed: ${error}`);
@@ -129,13 +135,13 @@ export class ChatService {
     // Direct query: find rooms where both users are participants
     const roomIds1 = (await this.participantRepository.find({
       where: { userId: userId1 },
-      select: ['roomId'] as any,
+      select: { roomId: true },
     })).map((p: any) => p.roomId);
 
     if (roomIds1.length > 0) {
       const roomIds2 = (await this.participantRepository.find({
         where: { userId: userId2, roomId: In(roomIds1) },
-        select: ['roomId'] as any,
+        select: { roomId: true },
       })).map((p: any) => p.roomId);
 
       for (const roomId of roomIds2) {

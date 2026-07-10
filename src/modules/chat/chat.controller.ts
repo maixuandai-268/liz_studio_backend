@@ -11,12 +11,14 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ChannelService } from './channels/channel.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { CursorQueryDto, PaginatedResponseDto } from '@/common/dto/pagination.dto';
 import { MessageDto } from './dto/message.dto';
+import { CreateDmDto } from './dto/create-dm.dto';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
@@ -30,83 +32,68 @@ export class ChatController {
 
   @Get('rooms')
   async getUserRooms(@Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.getUserRooms(Number(userId));
-    } catch (error) {
-      this.logger.error(`Failed to fetch rooms: ${error}`);
-      throw new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.getUserRooms(Number(userId));
   }
 
   @Get('room/by-project/:projectId')
   async getRoomByProject(@Param('projectId') projectId: string) {
-    try {
-      return await this.chatService.getRoomByProject(Number(projectId));
-    } catch (error) {
-      throw new HttpException('Room not found', HttpStatus.NOT_FOUND);
-    }
+    return await this.chatService.getRoomByProject(Number(projectId));
   }
 
   @Post('dm')
-  async createOrGetDM(@Body() body: { targetUserId: number }, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.findOrCreateDM(Number(userId), body.targetUserId);
-    } catch (error) {
-      this.logger.error(`Failed to create DM: ${error}`);
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+  async createOrGetDM(
+    @Body(ValidationPipe) body: CreateDmDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.findOrCreateDM(Number(userId), body.targetUserId);
   }
 
   @Post('group')
-  async createGroup(@Body() body: { name: string; projectId?: number; participantIds: number[] }, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.createGroupRoom(body.name, Number(userId), body.participantIds, body.projectId);
-    } catch (error) {
-      this.logger.error(`Failed to create group: ${error}`);
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+  async createGroup(
+    @Body() body: { name: string; projectId?: number; participantIds: number[] },
+    @Req() req: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.createGroupRoom(
+      body.name, Number(userId), body.participantIds, body.projectId,
+    );
   }
 
   @Post('room/:roomId/participants')
-  async addParticipant(@Param('roomId') roomId: string, @Body() body: { userId: number }, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.addParticipant(Number(roomId), body.userId);
-    } catch (error) {
-      this.logger.error(`Failed to add participant: ${error}`);
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+  async addParticipant(
+    @Param('roomId') roomId: string,
+    @Body() body: { userId: number },
+    @Req() req: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.addParticipant(Number(roomId), body.userId);
   }
 
   @Delete('room/:roomId/participants/:targetUserId')
-  async removeParticipant(@Param('roomId') roomId: string, @Param('targetUserId') targetUserId: string, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.removeParticipant(Number(roomId), Number(targetUserId));
-    } catch (error) {
-      this.logger.error(`Failed to remove participant: ${error}`);
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+  async removeParticipant(
+    @Param('roomId') roomId: string,
+    @Param('targetUserId') targetUserId: string,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.removeParticipant(Number(roomId), Number(targetUserId));
   }
 
   @Post('channel')
   async sendChannelMessage(@Body() body: any, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      const userName = req.user?.code || req.user?.name || 'Unknown';
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.sendMessage(body.projectId, String(userId), userName, body.content);
-    } catch (error) {
-      throw new HttpException(error || 'Failed to send message', HttpStatus.BAD_REQUEST);
-    }
+    const userId = req.user?.id || req.user?.sub;
+    const userName = req.user?.code || req.user?.name || 'Unknown';
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.sendMessage(
+      body.projectId, String(userId), userName, body.content,
+    );
   }
 
   @Get('room/:roomId/messages/v2')
@@ -114,12 +101,7 @@ export class ChatController {
     @Param('roomId') roomId: string,
     @Query() query: CursorQueryDto,
   ): Promise<PaginatedResponseDto<MessageDto>> {
-    try {
-      return await this.chatService.findRoomMessagesWithCursor(Number(roomId), query);
-    } catch (error) {
-      this.logger.error(`Failed to fetch messages v2: ${error}`);
-      throw new HttpException(error || 'Failed to fetch messages', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+    return await this.chatService.findRoomMessagesWithCursor(Number(roomId), query);
   }
 
   @Get('channels/:channelName/messages/v2')
@@ -127,22 +109,16 @@ export class ChatController {
     @Param('channelName') channelName: string,
     @Query() query: CursorQueryDto,
   ) {
-    try {
-      return await this.channelService.findChannelMessagesWithCursor(channelName, query);
-    } catch (error) {
-      this.logger.error(`Failed to fetch channel messages v2: ${error}`);
-      throw new HttpException(error || 'Failed to fetch channel messages', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+    return await this.channelService.findChannelMessagesWithCursor(channelName, query);
   }
 
   @Get('channel/:projectId')
-  async getChannelMessages(@Param('projectId') projectId: string, @Query('limit') limit?: string) {
-    try {
-      const limitNum = limit ? parseInt(limit, 10) : 50;
-      return await this.chatService.getRoomMessages(projectId, limitNum);
-    } catch (error) {
-      throw new HttpException('Failed to fetch messages', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  async getChannelMessages(
+    @Param('projectId') projectId: string,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    return await this.chatService.getRoomMessages(projectId, limitNum);
   }
 
   @Post('room/:roomId/message')
@@ -151,29 +127,22 @@ export class ChatController {
     @Body() body: { content: string },
     @Req() req: any,
   ) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      const userName = req.user?.code || req.user?.name || 'Unknown';
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    const userId = req.user?.id || req.user?.sub;
+    const userName = req.user?.code || req.user?.name || 'Unknown';
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
 
-      const isInRoom = await this.chatService.isUserInRoom(Number(roomId), Number(userId));
-      if (!isInRoom) throw new HttpException('Not in room', HttpStatus.FORBIDDEN);
+    const isInRoom = await this.chatService.isUserInRoom(Number(roomId), Number(userId));
+    if (!isInRoom) throw new HttpException('Not in room', HttpStatus.FORBIDDEN);
 
-      return await this.chatService.sendRoomMessage(Number(roomId), Number(userId), userName, body.content);
-    } catch (error) {
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+    return await this.chatService.sendRoomMessage(
+      Number(roomId), Number(userId), userName, body.content,
+    );
   }
 
   @Post('messages/:id/read')
   async markAsRead(@Param('id') messageId: string, @Req() req: any) {
-    try {
-      const userId = req.user?.id || req.user?.sub;
-      if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
-      return await this.chatService.markMessageAsRead(Number(messageId), Number(userId));
-    } catch (error) {
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
-    }
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    return await this.chatService.markMessageAsRead(Number(messageId), Number(userId));
   }
 }
-

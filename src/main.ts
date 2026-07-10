@@ -3,18 +3,23 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
 import { ChannelService } from './modules/chat/channels/channel.service';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { ActivityLogInterceptor } from './common/interceptors/activity-log.interceptor';
+import { HttpAdapterHost } from '@nestjs/core';
 import cookieParser = require('cookie-parser');
-
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new GlobalExceptionFilter(httpAdapterHost));
+  app.useGlobalInterceptors(new ActivityLogInterceptor());
 
   const channelService = app.get(ChannelService);
   await channelService.initializeDefaultChannels();
 
   app.use(json({ limit: '200mb' }));
   app.use(urlencoded({ extended: true, limit: '200mb' }));
-
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,20 +32,19 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   app.enableCors({
-  origin: [
-    "http://localhost:3001",
-    "http://10.4.4.56:3001",
-    "https://lizstudio.net"
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-});
+    origin: [
+      'http://localhost:3001',
+      'http://10.4.4.56:3001',
+      'https://lizstudio.net',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
 
-    app.use(cookieParser());
+  app.use(cookieParser());
 
   const PORT = process.env.PORT || 3000;
 
-  // await app.listen(PORT,  "0.0.0.0");
   await app.listen(PORT);
   console.log(`Server is running on http://localhost:${PORT}`);
 }

@@ -57,15 +57,20 @@ export class AttendanceService {
 }
 
   private localNow(): Date {
-    return new Date();
-}
+    const now = new Date();
+    const dateStr = now.toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const [date, time] = dateStr.split(' ');
+    const [y, m, d] = date.split('-').map(Number);
+    const [h, min, s] = time.split(':').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, h, min, s));
+  }
 
   private toLocalTime(date: Date) {
-    return {
-        h: date.getHours(),
-        m: date.getMinutes(),
-    };
-}
+    const vnStr = date.toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const time = vnStr.split(' ')[1];
+    const [h, m] = time.split(':').map(Number);
+    return { h, m };
+  }
 
   private isWorkDay(date: Date): boolean {
     return WORKDAYS.includes(date.getDay());
@@ -79,6 +84,12 @@ export class AttendanceService {
       if (WORKDAYS.includes(day)) count++;
     }
     return count;
+  }
+
+  private monthBounds(year: number, month: number): [string, string] {
+    const m = String(month).padStart(2, '0');
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return [`${year}-${m}-01`, `${year}-${m}-${String(daysInMonth).padStart(2, '0')}`];
   }
 
   private calculateLateMinutes(checkIn: Date): number {
@@ -229,13 +240,12 @@ export class AttendanceService {
     const today = this.todayString();
     const currentDate = this.localNow();
     const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const monthPrefix = `${year}-${month}`;
+    const month = currentDate.getMonth() + 1;
 
     // Query only current month records
     const [allRecords, todayRecord] = await Promise.all([
       this.attendanceRepo.find({
-        where: { userId, attendanceDate: Between(`${monthPrefix}-01`, `${monthPrefix}-31`) } as any,
+        where: { userId, attendanceDate: Between(...this.monthBounds(year, month)) } as any,
       }) as unknown as AttendanceRecord[],
       this.attendanceRepo.findOne({
         where: { userId, attendanceDate: today } as any,
@@ -285,10 +295,9 @@ export class AttendanceService {
 
     for (let i = 2; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const suffix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-
+      const [start, end] = this.monthBounds(d.getFullYear(), d.getMonth() + 1);
       const records = await this.attendanceRepo.find({
-        where: { userId, attendanceDate: Between(`${suffix}-01`, `${suffix}-31`) } as any,
+        where: { userId, attendanceDate: Between(start, end) } as any,
       }) as unknown as AttendanceRecord[];
 
       const count = records.filter((r) => r.status === 'm').length;
@@ -301,6 +310,7 @@ export class AttendanceService {
   // Optimized: filter at DB level instead of fetching all
   async getMonthGrid(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    const [start, end] = this.monthBounds(year, month);
 
     const [employees, monthRecords] = await Promise.all([
       this.employeeRepo
@@ -309,7 +319,7 @@ export class AttendanceService {
         .where('user.role = :role', { role: 'employee' })
         .getMany() as unknown as Employee[],
       this.attendanceRepo.find({
-        where: { attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
+        where: { attendanceDate: Between(start, end) } as any,
       }) as unknown as AttendanceRecord[],
     ]);
 
@@ -371,6 +381,7 @@ export class AttendanceService {
   // Optimized: filter at DB level instead of fetching all
   async getMonthlySummary(year: number, month: number) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    const [start, end] = this.monthBounds(year, month);
 
     const [employees, monthRecords] = await Promise.all([
       this.employeeRepo
@@ -379,7 +390,7 @@ export class AttendanceService {
         .where('user.role = :role', { role: 'employee' })
         .getMany() as unknown as Employee[],
       this.attendanceRepo.find({
-        where: { attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
+        where: { attendanceDate: Between(start, end) } as any,
       }) as unknown as AttendanceRecord[],
     ]);
 
@@ -462,9 +473,8 @@ export class AttendanceService {
   // Optimized: filter at DB level
   async getUserRecords(userId: number, year?: number, month?: number) {
     if (year && month) {
-      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
       return this.attendanceRepo.find({
-        where: { userId, attendanceDate: Between(`${monthStr}-01`, `${monthStr}-31`) } as any,
+        where: { userId, attendanceDate: Between(...this.monthBounds(year, month)) } as any,
         order: { attendanceDate: 'DESC' } as any,
       }) as unknown as AttendanceRecord[];
     }

@@ -80,7 +80,7 @@ export class CronService {
     // Single query to find who already checked in
     const checkedInUserIds = (await this.attendanceRepo.find({
       where: { attendanceDate: today } as any,
-      select: ['userId'] as any,
+      select: { userId: true },
     })).map((r: any) => r.userId);
     
     const checkedInSet = new Set(checkedInUserIds);
@@ -106,7 +106,7 @@ export class CronService {
     // Single query to find all users who checked in but NOT checked out
     const notCheckedOutUserIds = (await this.attendanceRepo.find({
       where: { attendanceDate: today, checkOut: IsNull() } as any,
-      select: ['userId'] as any,
+      select: { userId: true },
     })).map((r: any) => r.userId);
     
     const notCheckedOutSet = new Set(notCheckedOutUserIds);
