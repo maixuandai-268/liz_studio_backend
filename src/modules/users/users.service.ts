@@ -54,7 +54,7 @@ export class UsersService {
     const userId = Number(id);
     const user = await this.userRepo.findOneBy({ id: userId });
     if (!user) {
-      throw new NotFoundException(`C� l?i khi t�m id ngu?i d�ng : ${userId}`);
+      throw new NotFoundException(`Có lỗi khi tìm id người dùng : ${userId}`);
     }
 
     Object.assign(user, updateUserDto);
