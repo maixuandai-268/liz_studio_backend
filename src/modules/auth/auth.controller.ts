@@ -22,10 +22,13 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @Post('refresh')
-  async refresh(@Body() dto: RefreshTokenDto) {
-    return await this.authService.refresh(dto.refresh_token);
-  }
+ @Post("refresh")
+async refresh(
+  @Req() req: Request,
+  @Body() dto: RefreshTokenDto,
+) {
+  return this.authService.refresh(dto.refresh_token);
+}
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)

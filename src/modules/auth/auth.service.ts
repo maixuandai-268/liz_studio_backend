@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable prettier/prettier */
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -83,22 +79,40 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: process.env.JWT_REFRESH_SECRET,
-      });
-      const user = await this.usersService.findById(payload.sub);
-      if (!user) throw new UnauthorizedException('User not found');
-      const isMatch = await bcrypt.compare(refreshToken, user.refresh_token);
-      if (!isMatch) throw new UnauthorizedException('Invalid refresh token');
+  try {
+    const payload = this.jwtService.verify(refreshToken, {
+      secret: process.env.JWT_REFRESH_SECRET,
+    });
+    const user = await this.usersService.findById(payload.sub);
 
-      const newPayload = { sub: user.id, code: user.employee_code, role: user.role };
-      const accessToken = this.jwtService.sign(newPayload, { expiresIn: '15m' });
-      return { access_token: accessToken };
-    } catch {
-      throw new UnauthorizedException('Refresh token invalid');
+    if (!user) {
+      throw new UnauthorizedException("User not found");
     }
+
+    const isMatch = await bcrypt.compare(refreshToken, user.refresh_token);
+
+    if (!isMatch) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const newPayload = {
+      sub: user.id,
+      code: user.employee_code,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(newPayload, {
+      expiresIn: "15m",
+    });
+
+    return {
+      access_token: accessToken,
+    };
+  } catch (e) {
+    console.error("Refresh error:", e);
+    throw e;
   }
+}
 
   async logout(userId: number) {
     await this.usersService.updateRefreshToken(userId , null);
